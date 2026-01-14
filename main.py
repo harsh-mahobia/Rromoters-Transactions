@@ -112,6 +112,14 @@ if uploaded_file is not None:
         # Case-insensitive matching, handle NaN values
         df = df[df['MODE OF ACQUISITION'].notna() & 
                 df['MODE OF ACQUISITION'].astype(str).str.strip().str.lower().isin(['market sale', 'market purchase'])]
+        mode_filtered_count = len(df)
+        
+        # Filter 5: Only keep TYPE OF SECURITY (PRIOR) as "Equity Shares"
+        # Case-insensitive matching, handle NaN values and variations
+        # Convert to string, strip whitespace, lowercase, and check for equity share(s)
+        security_prior_col = df['TYPE OF SECURITY (PRIOR)'].astype(str).str.strip().str.lower()
+        df = df[(df['TYPE OF SECURITY (PRIOR)'].notna()) & 
+                (security_prior_col.str.contains('equity share', na=False))]
         final_count = len(df)
         
         # Remove specified columns
@@ -148,8 +156,10 @@ if uploaded_file is not None:
                 filter_info.append(f"{regulation_filtered_count - category_filtered_count} rows with other CATEGORY OF PERSON values")
             if category_filtered_count != transaction_filtered_count:
                 filter_info.append(f"{category_filtered_count - transaction_filtered_count} rows with other ACQUISITION/DISPOSAL TRANSACTION TYPE values")
-            if transaction_filtered_count != final_count:
-                filter_info.append(f"{transaction_filtered_count - final_count} rows with other MODE OF ACQUISITION values")
+            if transaction_filtered_count != mode_filtered_count:
+                filter_info.append(f"{transaction_filtered_count - mode_filtered_count} rows with other MODE OF ACQUISITION values")
+            if mode_filtered_count != final_count:
+                filter_info.append(f"{mode_filtered_count - final_count} rows with other TYPE OF SECURITY (PRIOR) values")
             
             st.info(f"📊 **Filters Applied:** Removed {', '.join(filter_info)}. Showing {final_count} filtered rows.")
         
@@ -168,7 +178,7 @@ if uploaded_file is not None:
         
         # Dropdown for column selection
         st.subheader("🔽 Additional Column Selection & Filtering")
-        st.caption("ℹ️ Automatic filters already applied: REGULATION ≠ '7(3)', CATEGORY OF PERSON = 'Promoter Group' or 'Promoters', ACQUISITION/DISPOSAL TRANSACTION TYPE = 'Buy' or 'Sell', and MODE OF ACQUISITION = 'Market Sale' or 'Market Purchase'")
+        st.caption("ℹ️ Automatic filters already applied: REGULATION ≠ '7(3)', CATEGORY OF PERSON = 'Promoter Group' or 'Promoters', ACQUISITION/DISPOSAL TRANSACTION TYPE = 'Buy' or 'Sell', MODE OF ACQUISITION = 'Market Sale' or 'Market Purchase', and TYPE OF SECURITY (PRIOR) = 'Equity Shares'")
         
         col_left, col_right = st.columns([1, 1])
         
