@@ -253,6 +253,129 @@ if uploaded_file is not None:
         else:
             st.warning("No data to display. Please adjust your filters.")
         
+        # Transactions Analytics Section
+        st.markdown("---")
+        st.subheader("📈 Transactions Analytics")
+        
+        # Show number of distinct companies
+        if len(df) > 0 and 'COMPANY' in df.columns:
+            distinct_companies = df['COMPANY'].nunique()
+            st.caption(f"📊 **{distinct_companies}** distinct companies")
+        
+        if len(df) > 0:
+            try:
+                # Prepare data for transactions analysis
+                transactions_df = df.copy()
+                
+                # Check if required columns exist before processing
+                if 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)' not in transactions_df.columns:
+                    st.error("❌ Column 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)' not found in the data.")
+                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
+                elif 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)' not in transactions_df.columns:
+                    st.error("❌ Column 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)' not found in the data.")
+                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
+                elif 'COMPANY' not in transactions_df.columns:
+                    st.error("❌ Column 'COMPANY' not found in the data.")
+                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
+                elif 'ACQUISITION/DISPOSAL TRANSACTION TYPE' not in transactions_df.columns:
+                    st.error("❌ Column 'ACQUISITION/DISPOSAL TRANSACTION TYPE' not found in the data.")
+                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
+                else:
+                    # Convert numeric columns, handling any non-numeric values
+                    transactions_df['NO. OF SECURITIES (ACQUIRED/DISPLOSED)'] = pd.to_numeric(
+                        transactions_df['NO. OF SECURITIES (ACQUIRED/DISPLOSED)'], 
+                        errors='coerce'
+                    )
+                    transactions_df['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] = pd.to_numeric(
+                        transactions_df['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'], 
+                        errors='coerce'
+                    )
+                    
+                    # Group by company and transaction type
+                    transaction_type_upper = transactions_df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.upper()
+                    buy_data = transactions_df[transaction_type_upper == 'BUY']
+                    sell_data = transactions_df[transaction_type_upper == 'SELL']
+                    
+                    # Calculate totals by company for Buy transactions
+                    if len(buy_data) > 0:
+                        buy_summary = buy_data.groupby('COMPANY').agg({
+                            'NO. OF SECURITIES (ACQUIRED/DISPLOSED)': 'sum',
+                            'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum'
+                        }).reset_index()
+                        buy_summary.columns = ['COMPANY', 'Shares Buy', 'Amount of Shares Buy']
+                    else:
+                        buy_summary = pd.DataFrame(columns=['COMPANY', 'Shares Buy', 'Amount of Shares Buy'])
+                    
+                    # Calculate totals by company for Sell transactions
+                    if len(sell_data) > 0:
+                        sell_summary = sell_data.groupby('COMPANY').agg({
+                            'NO. OF SECURITIES (ACQUIRED/DISPLOSED)': 'sum',
+                            'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum'
+                        }).reset_index()
+                        sell_summary.columns = ['COMPANY', 'Shares Sell', 'Amount of Shares Sell']
+                    else:
+                        sell_summary = pd.DataFrame(columns=['COMPANY', 'Shares Sell', 'Amount of Shares Sell'])
+                    
+                    # Merge buy and sell summaries
+                    if len(buy_summary) > 0 and len(sell_summary) > 0:
+                        transactions_summary = pd.merge(
+                            buy_summary,
+                            sell_summary,
+                            on='COMPANY',
+                            how='outer'
+                        ).fillna(0)
+                    elif len(buy_summary) > 0:
+                        transactions_summary = buy_summary.copy()
+                        transactions_summary['Shares Sell'] = 0
+                        transactions_summary['Amount of Shares Sell'] = 0
+                    elif len(sell_summary) > 0:
+                        transactions_summary = sell_summary.copy()
+                        transactions_summary['Shares Buy'] = 0
+                        transactions_summary['Amount of Shares Buy'] = 0
+                    else:
+                        transactions_summary = pd.DataFrame(columns=['COMPANY', 'Shares Buy', 'Amount of Shares Buy', 'Shares Sell', 'Amount of Shares Sell'])
+                    
+                    if len(transactions_summary) > 0:
+                        # Sort by company name
+                        transactions_summary = transactions_summary.sort_values('COMPANY').reset_index(drop=True)
+                        
+                        # Format the numbers for better display
+                        transactions_summary['Shares Buy'] = transactions_summary['Shares Buy'].fillna(0).astype(int)
+                        transactions_summary['Shares Sell'] = transactions_summary['Shares Sell'].fillna(0).astype(int)
+                        transactions_summary['Amount of Shares Buy'] = transactions_summary['Amount of Shares Buy'].fillna(0).round(2)
+                        transactions_summary['Amount of Shares Sell'] = transactions_summary['Amount of Shares Sell'].fillna(0).round(2)
+                        
+                        # Display the transactions summary
+                        st.dataframe(
+                            transactions_summary,
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                        
+                        # Download button for transactions summary
+                        transactions_csv_buffer = io.StringIO()
+                        transactions_summary.to_csv(transactions_csv_buffer, index=False)
+                        transactions_csv_string = transactions_csv_buffer.getvalue()
+                        
+                        st.download_button(
+                            label="📥 Download Transactions Summary as CSV",
+                            data=transactions_csv_string,
+                            file_name="transactions_summary.csv",
+                            mime="text/csv"
+                        )
+                    else:
+                        st.info("No transaction data available to display.")
+                
+            except KeyError as e:
+                missing_col = str(e).strip("'")
+                st.error(f"❌ Missing required column for transactions analysis: {missing_col}")
+                st.info(f"Available columns: {', '.join(sorted(df.columns.tolist()))}")
+            except Exception as e:
+                st.error(f"❌ Error generating transactions analytics: {str(e)}")
+                st.info("Please ensure the data contains valid numeric values for shares and amounts.")
+        else:
+            st.info("No data available for transactions analysis.")
+        
         # Additional information section
         with st.expander("📊 Data Statistics"):
             st.subheader("Column Information")
