@@ -100,6 +100,12 @@ if uploaded_file is not None:
         # Case-insensitive matching, handle NaN values
         df = df[df['CATEGORY OF PERSON'].notna() & 
                 df['CATEGORY OF PERSON'].astype(str).str.strip().str.lower().isin(['promoter group', 'promoters'])]
+        category_filtered_count = len(df)
+        
+        # Filter 3: Only keep ACQUISITION/DISPOSAL TRANSACTION TYPE as "Buy" or "Sell"
+        # Case-insensitive matching, handle NaN values
+        df = df[df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].notna() & 
+                df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.lower().isin(['buy', 'sell'])]
         final_count = len(df)
         
         # Store filtered dataframe
@@ -110,7 +116,15 @@ if uploaded_file is not None:
         
         # Show filter information
         if original_count != final_count:
-            st.info(f"📊 **Filters Applied:** Removed {original_count - regulation_filtered_count} rows with REGULATION '7(3)' and {regulation_filtered_count - final_count} rows with other CATEGORY OF PERSON values. Showing {final_count} filtered rows.")
+            filter_info = []
+            if original_count != regulation_filtered_count:
+                filter_info.append(f"{original_count - regulation_filtered_count} rows with REGULATION '7(3)'")
+            if regulation_filtered_count != category_filtered_count:
+                filter_info.append(f"{regulation_filtered_count - category_filtered_count} rows with other CATEGORY OF PERSON values")
+            if category_filtered_count != final_count:
+                filter_info.append(f"{category_filtered_count - final_count} rows with other ACQUISITION/DISPOSAL TRANSACTION TYPE values")
+            
+            st.info(f"📊 **Filters Applied:** Removed {', '.join(filter_info)}. Showing {final_count} filtered rows.")
         
         # Show basic info
         col1, col2, col3, col4 = st.columns(4)
@@ -127,7 +141,7 @@ if uploaded_file is not None:
         
         # Dropdown for column selection
         st.subheader("🔽 Additional Column Selection & Filtering")
-        st.caption("ℹ️ Automatic filters already applied: REGULATION ≠ '7(3)' and CATEGORY OF PERSON = 'Promoter Group' or 'Promoters'")
+        st.caption("ℹ️ Automatic filters already applied: REGULATION ≠ '7(3)', CATEGORY OF PERSON = 'Promoter Group' or 'Promoters', and ACQUISITION/DISPOSAL TRANSACTION TYPE = 'Buy' or 'Sell'")
         
         col_left, col_right = st.columns([1, 1])
         
