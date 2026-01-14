@@ -106,6 +106,12 @@ if uploaded_file is not None:
         # Case-insensitive matching, handle NaN values
         df = df[df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].notna() & 
                 df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.lower().isin(['buy', 'sell'])]
+        transaction_filtered_count = len(df)
+        
+        # Filter 4: Only keep MODE OF ACQUISITION as "Market Sell" or "Market Purchase"
+        # Case-insensitive matching, handle NaN values
+        df = df[df['MODE OF ACQUISITION'].notna() & 
+                df['MODE OF ACQUISITION'].astype(str).str.strip().str.lower().isin(['market sell', 'market purchase'])]
         final_count = len(df)
         
         # Store filtered dataframe
@@ -121,8 +127,10 @@ if uploaded_file is not None:
                 filter_info.append(f"{original_count - regulation_filtered_count} rows with REGULATION '7(3)'")
             if regulation_filtered_count != category_filtered_count:
                 filter_info.append(f"{regulation_filtered_count - category_filtered_count} rows with other CATEGORY OF PERSON values")
-            if category_filtered_count != final_count:
-                filter_info.append(f"{category_filtered_count - final_count} rows with other ACQUISITION/DISPOSAL TRANSACTION TYPE values")
+            if category_filtered_count != transaction_filtered_count:
+                filter_info.append(f"{category_filtered_count - transaction_filtered_count} rows with other ACQUISITION/DISPOSAL TRANSACTION TYPE values")
+            if transaction_filtered_count != final_count:
+                filter_info.append(f"{transaction_filtered_count - final_count} rows with other MODE OF ACQUISITION values")
             
             st.info(f"📊 **Filters Applied:** Removed {', '.join(filter_info)}. Showing {final_count} filtered rows.")
         
@@ -141,7 +149,7 @@ if uploaded_file is not None:
         
         # Dropdown for column selection
         st.subheader("🔽 Additional Column Selection & Filtering")
-        st.caption("ℹ️ Automatic filters already applied: REGULATION ≠ '7(3)', CATEGORY OF PERSON = 'Promoter Group' or 'Promoters', and ACQUISITION/DISPOSAL TRANSACTION TYPE = 'Buy' or 'Sell'")
+        st.caption("ℹ️ Automatic filters already applied: REGULATION ≠ '7(3)', CATEGORY OF PERSON = 'Promoter Group' or 'Promoters', ACQUISITION/DISPOSAL TRANSACTION TYPE = 'Buy' or 'Sell', and MODE OF ACQUISITION = 'Market Sell' or 'Market Purchase'")
         
         col_left, col_right = st.columns([1, 1])
         
