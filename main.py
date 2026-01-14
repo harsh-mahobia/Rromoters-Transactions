@@ -96,6 +96,7 @@ if uploaded_file is not None:
         df = df[df['REGULATION'].astype(str).str.strip() != '7(3)']
         regulation_filtered_count = len(df)
         
+        #TODO: anything after promoter should be there.
         # Filter 2: Only keep CATEGORY OF PERSON as "Promoter Group" or "Promoters"
         # Case-insensitive matching, handle NaN values
         df = df[df['CATEGORY OF PERSON'].notna() & 
