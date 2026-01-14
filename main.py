@@ -422,22 +422,22 @@ if uploaded_file is not None:
                         
                         max_transaction = {'COMPANY': company}
                         
-                        # Max Buy Amount and Date
+                        # Max Buy Value and Date
                         if len(company_buy) > 0:
                             buy_value_col = company_buy['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
                             if buy_value_col.notna().any():
                                 max_buy_idx = buy_value_col.idxmax()
                                 if pd.notna(max_buy_idx):
-                                    max_transaction['Max Buy Amount'] = company_buy.loc[max_buy_idx, 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
-                                    max_transaction['Max Buy Amount Date'] = company_buy.loc[max_buy_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
+                                    max_transaction['Max Buy Value'] = company_buy.loc[max_buy_idx, 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
+                                    max_transaction['Max Buy Value Date'] = company_buy.loc[max_buy_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
                                 else:
-                                    max_transaction['Max Buy Amount'] = None
-                                    max_transaction['Max Buy Amount Date'] = None
+                                    max_transaction['Max Buy Value'] = None
+                                    max_transaction['Max Buy Value Date'] = None
                             else:
-                                max_transaction['Max Buy Amount'] = None
-                                max_transaction['Max Buy Amount Date'] = None
+                                max_transaction['Max Buy Value'] = None
+                                max_transaction['Max Buy Value Date'] = None
                             
-                            # Max Buy Shares and Date
+                            # Number of Max Buy Shares and Date
                             # If multiple rows have same max shares, choose the one with highest value
                             buy_shares_col = company_buy['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
                             buy_value_col = company_buy['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
@@ -456,42 +456,42 @@ if uploaded_file is not None:
                                         if len(max_shares_max_value_rows) > 0:
                                             # Get the first row (or use idxmax if needed)
                                             max_buy_shares_idx = max_shares_max_value_rows.index[0]
-                                            max_transaction['Max Buy Shares'] = company_buy.loc[max_buy_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                                            max_transaction['Max Buy Shares Date'] = company_buy.loc[max_buy_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
+                                            max_transaction['Number of Max Buy Shares'] = company_buy.loc[max_buy_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                                            max_transaction['Number of Max Buy Shares Date'] = company_buy.loc[max_buy_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
                                         else:
-                                            max_transaction['Max Buy Shares'] = None
-                                            max_transaction['Max Buy Shares Date'] = None
+                                            max_transaction['Number of Max Buy Shares'] = None
+                                            max_transaction['Number of Max Buy Shares Date'] = None
                                     else:
-                                        max_transaction['Max Buy Shares'] = None
-                                        max_transaction['Max Buy Shares Date'] = None
+                                        max_transaction['Number of Max Buy Shares'] = None
+                                        max_transaction['Number of Max Buy Shares Date'] = None
                                 else:
-                                    max_transaction['Max Buy Shares'] = None
-                                    max_transaction['Max Buy Shares Date'] = None
+                                    max_transaction['Number of Max Buy Shares'] = None
+                                    max_transaction['Number of Max Buy Shares Date'] = None
                             else:
-                                max_transaction['Max Buy Shares'] = None
-                                max_transaction['Max Buy Shares Date'] = None
+                                max_transaction['Number of Max Buy Shares'] = None
+                                max_transaction['Number of Max Buy Shares Date'] = None
                         else:
-                            max_transaction['Max Buy Amount'] = None
-                            max_transaction['Max Buy Amount Date'] = None
-                            max_transaction['Max Buy Shares'] = None
-                            max_transaction['Max Buy Shares Date'] = None
+                            max_transaction['Max Buy Value'] = None
+                            max_transaction['Max Buy Value Date'] = None
+                            max_transaction['Number of Max Buy Shares'] = None
+                            max_transaction['Number of Max Buy Shares Date'] = None
                         
-                        # Max Sell Amount and Date
+                        # Max Sell Value and Date
                         if len(company_sell) > 0:
                             sell_value_col = company_sell['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
                             if sell_value_col.notna().any():
                                 max_sell_idx = sell_value_col.idxmax()
                                 if pd.notna(max_sell_idx):
-                                    max_transaction['Max Sell Amount'] = company_sell.loc[max_sell_idx, 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
-                                    max_transaction['Max Sell Amount Date'] = company_sell.loc[max_sell_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
+                                    max_transaction['Max Sell Value'] = company_sell.loc[max_sell_idx, 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
+                                    max_transaction['Max Sell Value Date'] = company_sell.loc[max_sell_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
                                 else:
-                                    max_transaction['Max Sell Amount'] = None
-                                    max_transaction['Max Sell Amount Date'] = None
+                                    max_transaction['Max Sell Value'] = None
+                                    max_transaction['Max Sell Value Date'] = None
                             else:
-                                max_transaction['Max Sell Amount'] = None
-                                max_transaction['Max Sell Amount Date'] = None
+                                max_transaction['Max Sell Value'] = None
+                                max_transaction['Max Sell Value Date'] = None
                             
-                            # Max Sell Shares and Date
+                            # Number of Max Sell Shares and Date
                             # If multiple rows have same max shares, choose the one with highest value
                             sell_shares_col = company_sell['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
                             sell_value_col = company_sell['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
@@ -510,25 +510,25 @@ if uploaded_file is not None:
                                         if len(max_shares_max_value_rows) > 0:
                                             # Get the first row (or use idxmax if needed)
                                             max_sell_shares_idx = max_shares_max_value_rows.index[0]
-                                            max_transaction['Max Sell Shares'] = company_sell.loc[max_sell_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                                            max_transaction['Max Sell Shares Date'] = company_sell.loc[max_sell_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
+                                            max_transaction['Number of Max Sell Shares'] = company_sell.loc[max_sell_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                                            max_transaction['Number of Max Sell Shares Date'] = company_sell.loc[max_sell_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
                                         else:
-                                            max_transaction['Max Sell Shares'] = None
-                                            max_transaction['Max Sell Shares Date'] = None
+                                            max_transaction['Number of Max Sell Shares'] = None
+                                            max_transaction['Number of Max Sell Shares Date'] = None
                                     else:
-                                        max_transaction['Max Sell Shares'] = None
-                                        max_transaction['Max Sell Shares Date'] = None
+                                        max_transaction['Number of Max Sell Shares'] = None
+                                        max_transaction['Number of Max Sell Shares Date'] = None
                                 else:
-                                    max_transaction['Max Sell Shares'] = None
-                                    max_transaction['Max Sell Shares Date'] = None
+                                    max_transaction['Number of Max Sell Shares'] = None
+                                    max_transaction['Number of Max Sell Shares Date'] = None
                             else:
-                                max_transaction['Max Sell Shares'] = None
-                                max_transaction['Max Sell Shares Date'] = None
+                                max_transaction['Number of Max Sell Shares'] = None
+                                max_transaction['Number of Max Sell Shares Date'] = None
                         else:
-                            max_transaction['Max Sell Amount'] = None
-                            max_transaction['Max Sell Amount Date'] = None
-                            max_transaction['Max Sell Shares'] = None
-                            max_transaction['Max Sell Shares Date'] = None
+                            max_transaction['Max Sell Value'] = None
+                            max_transaction['Max Sell Value Date'] = None
+                            max_transaction['Number of Max Sell Shares'] = None
+                            max_transaction['Number of Max Sell Shares Date'] = None
                         
                         max_transactions_list.append(max_transaction)
                     
@@ -537,14 +537,14 @@ if uploaded_file is not None:
                     max_transactions_summary = max_transactions_summary.sort_values('COMPANY').reset_index(drop=True)
                     
                     # Format the numbers
-                    if 'Max Buy Amount' in max_transactions_summary.columns:
-                        max_transactions_summary['Max Buy Amount'] = max_transactions_summary['Max Buy Amount'].fillna(0).round(2)
-                    if 'Max Buy Shares' in max_transactions_summary.columns:
-                        max_transactions_summary['Max Buy Shares'] = max_transactions_summary['Max Buy Shares'].fillna(0).astype(int)
-                    if 'Max Sell Amount' in max_transactions_summary.columns:
-                        max_transactions_summary['Max Sell Amount'] = max_transactions_summary['Max Sell Amount'].fillna(0).round(2)
-                    if 'Max Sell Shares' in max_transactions_summary.columns:
-                        max_transactions_summary['Max Sell Shares'] = max_transactions_summary['Max Sell Shares'].fillna(0).astype(int)
+                    if 'Max Buy Value' in max_transactions_summary.columns:
+                        max_transactions_summary['Max Buy Value'] = max_transactions_summary['Max Buy Value'].fillna(0).round(2)
+                    if 'Number of Max Buy Shares' in max_transactions_summary.columns:
+                        max_transactions_summary['Number of Max Buy Shares'] = max_transactions_summary['Number of Max Buy Shares'].fillna(0).astype(int)
+                    if 'Max Sell Value' in max_transactions_summary.columns:
+                        max_transactions_summary['Max Sell Value'] = max_transactions_summary['Max Sell Value'].fillna(0).round(2)
+                    if 'Number of Max Sell Shares' in max_transactions_summary.columns:
+                        max_transactions_summary['Number of Max Sell Shares'] = max_transactions_summary['Number of Max Sell Shares'].fillna(0).astype(int)
                     
                     # Display the max transactions summary
                     if len(max_transactions_summary) > 0:
