@@ -438,12 +438,32 @@ if uploaded_file is not None:
                                 max_transaction['Max Buy Amount Date'] = None
                             
                             # Max Buy Shares and Date
+                            # If multiple rows have same max shares, choose the one with highest value
                             buy_shares_col = company_buy['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                            buy_value_col = company_buy['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
                             if buy_shares_col.notna().any():
-                                max_buy_shares_idx = buy_shares_col.idxmax()
-                                if pd.notna(max_buy_shares_idx):
-                                    max_transaction['Max Buy Shares'] = company_buy.loc[max_buy_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                                    max_transaction['Max Buy Shares Date'] = company_buy.loc[max_buy_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
+                                max_shares_value = buy_shares_col.max()
+                                # Find all rows with max shares
+                                max_shares_rows = company_buy[buy_shares_col == max_shares_value]
+                                if len(max_shares_rows) > 0:
+                                    # Among rows with max shares, find the one with max value
+                                    max_value_in_max_shares = max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'].max()
+                                    if pd.notna(max_value_in_max_shares):
+                                        max_shares_max_value_rows = max_shares_rows[
+                                            max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] == max_value_in_max_shares
+                                        ]
+                                        # Check if we have any rows after filtering
+                                        if len(max_shares_max_value_rows) > 0:
+                                            # Get the first row (or use idxmax if needed)
+                                            max_buy_shares_idx = max_shares_max_value_rows.index[0]
+                                            max_transaction['Max Buy Shares'] = company_buy.loc[max_buy_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                                            max_transaction['Max Buy Shares Date'] = company_buy.loc[max_buy_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
+                                        else:
+                                            max_transaction['Max Buy Shares'] = None
+                                            max_transaction['Max Buy Shares Date'] = None
+                                    else:
+                                        max_transaction['Max Buy Shares'] = None
+                                        max_transaction['Max Buy Shares Date'] = None
                                 else:
                                     max_transaction['Max Buy Shares'] = None
                                     max_transaction['Max Buy Shares Date'] = None
@@ -472,12 +492,32 @@ if uploaded_file is not None:
                                 max_transaction['Max Sell Amount Date'] = None
                             
                             # Max Sell Shares and Date
+                            # If multiple rows have same max shares, choose the one with highest value
                             sell_shares_col = company_sell['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                            sell_value_col = company_sell['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
                             if sell_shares_col.notna().any():
-                                max_sell_shares_idx = sell_shares_col.idxmax()
-                                if pd.notna(max_sell_shares_idx):
-                                    max_transaction['Max Sell Shares'] = company_sell.loc[max_sell_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                                    max_transaction['Max Sell Shares Date'] = company_sell.loc[max_sell_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
+                                max_shares_value = sell_shares_col.max()
+                                # Find all rows with max shares
+                                max_shares_rows = company_sell[sell_shares_col == max_shares_value]
+                                if len(max_shares_rows) > 0:
+                                    # Among rows with max shares, find the one with max value
+                                    max_value_in_max_shares = max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'].max()
+                                    if pd.notna(max_value_in_max_shares):
+                                        max_shares_max_value_rows = max_shares_rows[
+                                            max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] == max_value_in_max_shares
+                                        ]
+                                        # Check if we have any rows after filtering
+                                        if len(max_shares_max_value_rows) > 0:
+                                            # Get the first row (or use idxmax if needed)
+                                            max_sell_shares_idx = max_shares_max_value_rows.index[0]
+                                            max_transaction['Max Sell Shares'] = company_sell.loc[max_sell_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                                            max_transaction['Max Sell Shares Date'] = company_sell.loc[max_sell_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
+                                        else:
+                                            max_transaction['Max Sell Shares'] = None
+                                            max_transaction['Max Sell Shares Date'] = None
+                                    else:
+                                        max_transaction['Max Sell Shares'] = None
+                                        max_transaction['Max Sell Shares Date'] = None
                                 else:
                                     max_transaction['Max Sell Shares'] = None
                                     max_transaction['Max Sell Shares Date'] = None
