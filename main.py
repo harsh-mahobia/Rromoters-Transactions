@@ -114,6 +114,25 @@ if uploaded_file is not None:
                 df['MODE OF ACQUISITION'].astype(str).str.strip().str.lower().isin(['market sale', 'market purchase'])]
         final_count = len(df)
         
+        # Remove specified columns
+        columns_to_remove = [
+            'DERIVATIVE TYPE SECURITY',
+            'DERIVATIVE CONTRACT SPECIFICATION',
+            'NOTIONAL VALUE(BUY)',
+            'NUMBER OF UNITS/CONTRACT LOT SIZE (BUY)',
+            'NOTIONAL VALUE(SELL)',
+            'NUMBER OF UNITS/CONTRACT LOT SIZE  (SELL)',
+            'REMARK',
+            'BROADCASTE DATE AND TIME',
+            'XBRL',
+            'TYPE OF SECURITY (ACQUIRED/DISPLOSED)'
+        ]
+        
+        # Remove columns that exist in the dataframe
+        existing_columns_to_remove = [col for col in columns_to_remove if col in df.columns]
+        if existing_columns_to_remove:
+            df = df.drop(columns=existing_columns_to_remove)
+        
         # Store filtered dataframe
         st.session_state.df = df
         
