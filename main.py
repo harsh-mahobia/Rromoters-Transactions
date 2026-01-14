@@ -108,10 +108,10 @@ if uploaded_file is not None:
                 df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.lower().isin(['buy', 'sell'])]
         transaction_filtered_count = len(df)
         
-        # Filter 4: Only keep MODE OF ACQUISITION as "Market Sell" or "Market Purchase"
+        # Filter 4: Only keep MODE OF ACQUISITION as "Market Sale" or "Market Purchase"
         # Case-insensitive matching, handle NaN values
         df = df[df['MODE OF ACQUISITION'].notna() & 
-                df['MODE OF ACQUISITION'].astype(str).str.strip().str.lower().isin(['market sell', 'market purchase'])]
+                df['MODE OF ACQUISITION'].astype(str).str.strip().str.lower().isin(['market sale', 'market purchase'])]
         final_count = len(df)
         
         # Store filtered dataframe
@@ -149,7 +149,7 @@ if uploaded_file is not None:
         
         # Dropdown for column selection
         st.subheader("🔽 Additional Column Selection & Filtering")
-        st.caption("ℹ️ Automatic filters already applied: REGULATION ≠ '7(3)', CATEGORY OF PERSON = 'Promoter Group' or 'Promoters', ACQUISITION/DISPOSAL TRANSACTION TYPE = 'Buy' or 'Sell', and MODE OF ACQUISITION = 'Market Sell' or 'Market Purchase'")
+        st.caption("ℹ️ Automatic filters already applied: REGULATION ≠ '7(3)', CATEGORY OF PERSON = 'Promoter Group' or 'Promoters', ACQUISITION/DISPOSAL TRANSACTION TYPE = 'Buy' or 'Sell', and MODE OF ACQUISITION = 'Market Sale' or 'Market Purchase'")
         
         col_left, col_right = st.columns([1, 1])
         
