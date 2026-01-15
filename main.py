@@ -280,6 +280,12 @@ if uploaded_file is not None:
                 elif 'ACQUISITION/DISPOSAL TRANSACTION TYPE' not in transactions_df.columns:
                     st.error("❌ Column 'ACQUISITION/DISPOSAL TRANSACTION TYPE' not found in the data.")
                     st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
+                elif '% SHAREHOLDING (PRIOR)' not in transactions_df.columns:
+                    st.error("❌ Column '% SHAREHOLDING (PRIOR)' not found in the data.")
+                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
+                elif '% POST' not in transactions_df.columns:
+                    st.error("❌ Column '% POST' not found in the data.")
+                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
                 else:
                     # Convert numeric columns, handling any non-numeric values
                     transactions_df['NO. OF SECURITIES (ACQUIRED/DISPLOSED)'] = pd.to_numeric(
@@ -290,6 +296,17 @@ if uploaded_file is not None:
                         transactions_df['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'], 
                         errors='coerce'
                     )
+                    transactions_df['% SHAREHOLDING (PRIOR)'] = pd.to_numeric(
+                        transactions_df['% SHAREHOLDING (PRIOR)'], 
+                        errors='coerce'
+                    )
+                    transactions_df['% POST'] = pd.to_numeric(
+                        transactions_df['% POST'], 
+                        errors='coerce'
+                    )
+                    
+                    # Calculate delta (Post - Prior) for each transaction
+                    transactions_df['Shareholding Delta'] = transactions_df['% POST'] - transactions_df['% SHAREHOLDING (PRIOR)']
                     
                     # Group by company and transaction type
                     transaction_type_upper = transactions_df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.upper()
@@ -300,11 +317,12 @@ if uploaded_file is not None:
                     if len(buy_data) > 0:
                         buy_summary = buy_data.groupby('COMPANY').agg({
                             'NO. OF SECURITIES (ACQUIRED/DISPLOSED)': 'sum',
-                            'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum'
+                            'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum',
+                            'Shareholding Delta': 'sum'
                         }).reset_index()
-                        buy_summary.columns = ['COMPANY', 'Number of Shares Buy', 'Value of Shares Buy']
+                        buy_summary.columns = ['COMPANY', 'Number of Shares Buy', 'Value of Shares Buy', 'Delta Shareholding Buy']
                     else:
-                        buy_summary = pd.DataFrame(columns=['COMPANY', 'Number of Shares Buy', 'Value of Shares Buy'])
+                        buy_summary = pd.DataFrame(columns=['COMPANY', 'Number of Shares Buy', 'Value of Shares Buy', 'Delta Shareholding Buy'])
                     
                     # Calculate totals by company for Sell transactions
                     if len(sell_data) > 0:
