@@ -328,11 +328,12 @@ if uploaded_file is not None:
                     if len(sell_data) > 0:
                         sell_summary = sell_data.groupby('COMPANY').agg({
                             'NO. OF SECURITIES (ACQUIRED/DISPLOSED)': 'sum',
-                            'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum'
+                            'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum',
+                            'Shareholding Delta': 'sum'
                         }).reset_index()
-                        sell_summary.columns = ['COMPANY', 'Number of Shares Sell', 'Value of Shares Sell']
+                        sell_summary.columns = ['COMPANY', 'Number of Shares Sell', 'Value of Shares Sell', 'Delta Shareholding Sell']
                     else:
-                        sell_summary = pd.DataFrame(columns=['COMPANY', 'Number of Shares Sell', 'Value of Shares Sell'])
+                        sell_summary = pd.DataFrame(columns=['COMPANY', 'Number of Shares Sell', 'Value of Shares Sell', 'Delta Shareholding Sell'])
                     
                     # Merge buy and sell summaries
                     if len(buy_summary) > 0 and len(sell_summary) > 0:
@@ -346,12 +347,14 @@ if uploaded_file is not None:
                         transactions_summary = buy_summary.copy()
                         transactions_summary['Number of Shares Sell'] = 0
                         transactions_summary['Value of Shares Sell'] = 0
+                        transactions_summary['Delta Shareholding Sell'] = 0
                     elif len(sell_summary) > 0:
                         transactions_summary = sell_summary.copy()
                         transactions_summary['Number of Shares Buy'] = 0
                         transactions_summary['Value of Shares Buy'] = 0
+                        transactions_summary['Delta Shareholding Buy'] = 0
                     else:
-                        transactions_summary = pd.DataFrame(columns=['COMPANY', 'Number of Shares Buy', 'Value of Shares Buy', 'Number of Shares Sell', 'Value of Shares Sell'])
+                        transactions_summary = pd.DataFrame(columns=['COMPANY', 'Number of Shares Buy', 'Value of Shares Buy', 'Delta Shareholding Buy', 'Number of Shares Sell', 'Value of Shares Sell', 'Delta Shareholding Sell'])
                     
                     if len(transactions_summary) > 0:
                         # Sort by company name
@@ -362,6 +365,8 @@ if uploaded_file is not None:
                         transactions_summary['Number of Shares Sell'] = transactions_summary['Number of Shares Sell'].fillna(0).astype(int)
                         transactions_summary['Value of Shares Buy'] = transactions_summary['Value of Shares Buy'].fillna(0).round(2)
                         transactions_summary['Value of Shares Sell'] = transactions_summary['Value of Shares Sell'].fillna(0).round(2)
+                        transactions_summary['Delta Shareholding Buy'] = transactions_summary['Delta Shareholding Buy'].fillna(0).round(4)
+                        transactions_summary['Delta Shareholding Sell'] = transactions_summary['Delta Shareholding Sell'].fillna(0).round(4)
                         
                         # Display the transactions summary
                         st.dataframe(
