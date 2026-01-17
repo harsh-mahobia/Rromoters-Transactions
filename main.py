@@ -64,12 +64,15 @@ st.markdown(
         transition: all 0.3s ease;
         animation: pulse 2s ease-in-out infinite;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
+        margin: 0 10px 20px 10px;
     }
     .source-link:hover {
         transform: scale(1.05);
         box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
         animation: none;
+    }
+    .source-link.secondary {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
     }
     .source-container {
         text-align: center;
@@ -81,6 +84,11 @@ st.markdown(
            target="_blank" 
            class="source-link">
             🔗 Data Source: NSE India - Corporate Filings Insider Trading
+        </a>
+        <a href="https://www.stockscans.in/scans" 
+           target="_blank" 
+           class="source-link secondary">
+            📊 StockScans - Stock Screener & Analysis
         </a>
     </div>
     """,
