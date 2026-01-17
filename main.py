@@ -329,6 +329,9 @@ if uploaded_file is not None:
                 elif '% POST' not in transactions_df.columns:
                     st.error("❌ Column '% POST' not found in the data.")
                     st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
+                elif 'SYMBOL' not in transactions_df.columns:
+                    st.error("❌ Column 'SYMBOL' not found in the data.")
+                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
                 else:
                     # Convert numeric columns, handling any non-numeric values
                     transactions_df['NO. OF SECURITIES (ACQUIRED/DISPLOSED)'] = pd.to_numeric(
@@ -359,33 +362,42 @@ if uploaded_file is not None:
                     # Calculate totals by company for Buy transactions
                     if len(buy_data) > 0:
                         buy_summary = buy_data.groupby('COMPANY').agg({
+                            'SYMBOL': 'first',
                             'NO. OF SECURITIES (ACQUIRED/DISPLOSED)': 'sum',
                             'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum',
                             'Shareholding Delta': 'sum'
                         }).reset_index()
-                        buy_summary.columns = ['COMPANY', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy']
+                        buy_summary.columns = ['COMPANY', 'SYMBOL', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy']
                     else:
-                        buy_summary = pd.DataFrame(columns=['COMPANY', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy'])
+                        buy_summary = pd.DataFrame(columns=['COMPANY', 'SYMBOL', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy'])
                     
                     # Calculate totals by company for Sell transactions
                     if len(sell_data) > 0:
                         sell_summary = sell_data.groupby('COMPANY').agg({
+                            'SYMBOL': 'first',
                             'NO. OF SECURITIES (ACQUIRED/DISPLOSED)': 'sum',
                             'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum',
                             'Shareholding Delta': 'sum'
                         }).reset_index()
-                        sell_summary.columns = ['COMPANY', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell']
+                        sell_summary.columns = ['COMPANY', 'SYMBOL', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell']
                     else:
-                        sell_summary = pd.DataFrame(columns=['COMPANY', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell'])
+                        sell_summary = pd.DataFrame(columns=['COMPANY', 'SYMBOL', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell'])
                     
                     # Merge buy and sell summaries
                     if len(buy_summary) > 0 and len(sell_summary) > 0:
                         transactions_summary = pd.merge(
-                            buy_summary,
-                            sell_summary,
+                            buy_summary[['COMPANY', 'SYMBOL', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy']],
+                            sell_summary[['COMPANY', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell']],
                             on='COMPANY',
                             how='outer'
-                        ).fillna(0)
+                        )
+                        # Fill numeric columns with 0, but preserve SYMBOL from buy_summary or sell_summary
+                        numeric_cols = ['Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell']
+                        transactions_summary[numeric_cols] = transactions_summary[numeric_cols].fillna(0)
+                        # Fill SYMBOL by merging back with original data if needed
+                        if transactions_summary['SYMBOL'].isna().any():
+                            symbol_map = transactions_df.groupby('COMPANY')['SYMBOL'].first().to_dict()
+                            transactions_summary['SYMBOL'] = transactions_summary['COMPANY'].map(symbol_map).fillna(transactions_summary['SYMBOL'])
                     elif len(buy_summary) > 0:
                         transactions_summary = buy_summary.copy()
                         transactions_summary['Total Share Sells'] = 0
@@ -397,7 +409,7 @@ if uploaded_file is not None:
                         transactions_summary['Total Value of Share Buy'] = 0
                         transactions_summary['Delta Shareholding Buy'] = 0
                     else:
-                        transactions_summary = pd.DataFrame(columns=['COMPANY', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell'])
+                        transactions_summary = pd.DataFrame(columns=['COMPANY', 'SYMBOL', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell'])
                     
                     if len(transactions_summary) > 0:
                         # Sort by company name
@@ -563,17 +575,173 @@ if uploaded_file is not None:
                             # Sort by company name
                             combined_summary = combined_summary.sort_values('COMPANY').reset_index(drop=True)
                             
-                            # Reorder columns: COMPANY first, then all Buy columns, then all Sell columns
-                            buy_columns = [col for col in combined_summary.columns if 'Buy' in col]
-                            sell_columns = [col for col in combined_summary.columns if 'Sell' in col]
-                            other_columns = [col for col in combined_summary.columns if col not in ['COMPANY'] + buy_columns + sell_columns]
+                            # Calculate average buy and sell from max transaction values (average price per share of max transaction)
+                            if 'Max Buy Value' in combined_summary.columns and 'Number of Max Buy Shares' in combined_summary.columns:
+                                combined_summary['Max Avg Buy'] = combined_summary.apply(
+                                    lambda row: (row['Max Buy Value'] / row['Number of Max Buy Shares']) 
+                                    if pd.notna(row['Number of Max Buy Shares']) and row['Number of Max Buy Shares'] > 0 else 0, axis=1
+                                ).round(2)
+                            else:
+                                combined_summary['Max Avg Buy'] = 0
                             
-                            # Create the desired column order
-                            column_order = ['COMPANY'] + sorted(buy_columns) + sorted(sell_columns) + sorted(other_columns)
+                            if 'Max Sell Value' in combined_summary.columns and 'Number of Max Sell Shares' in combined_summary.columns:
+                                combined_summary['Max Avg Sell'] = combined_summary.apply(
+                                    lambda row: (row['Max Sell Value'] / row['Number of Max Sell Shares']) 
+                                    if pd.notna(row['Number of Max Sell Shares']) and row['Number of Max Sell Shares'] > 0 else 0, axis=1
+                                ).round(2)
+                            else:
+                                combined_summary['Max Avg Sell'] = 0
+                            
+                            # Reorder columns: COMPANY first, then SYMBOL, then all Buy columns, then all Sell columns
+                            buy_columns = [col for col in combined_summary.columns if 'Buy' in col or col == 'Max Avg Buy']
+                            sell_columns = [col for col in combined_summary.columns if 'Sell' in col or col == 'Max Avg Sell']
+                            other_columns = [col for col in combined_summary.columns if col not in ['COMPANY', 'SYMBOL'] + buy_columns + sell_columns]
+                            
+                            # Create the desired column order: Max columns, then Avg, then Delta, then Totals
+                            # Buy columns order: Max Buy Date, Max Buy Value, Number of Max Buy Shares, Max Avg Buy, Delta Shareholding Buy, Total Share Buys, Total Value of Share Buy
+                            buy_column_order = [
+                                'Max Buy Date',
+                                'Max Buy Value',
+                                'Number of Max Buy Shares',
+                                'Max Avg Buy',
+                                'Delta Shareholding Buy',
+                                'Total Share Buys',
+                                'Total Value of Share Buy'
+                            ]
+                            # Keep only columns that exist
+                            buy_cols_sorted = [col for col in buy_column_order if col in buy_columns]
+                            # Add any remaining buy columns that weren't in the predefined order
+                            remaining_buy_cols = [col for col in buy_columns if col not in buy_cols_sorted]
+                            buy_cols_sorted = buy_cols_sorted + sorted(remaining_buy_cols)
+                            
+                            # Sell columns order: Max Sell Date, Max Sell Value, Number of Max Sell Shares, Max Avg Sell, Delta Shareholding Sell, Total Share Sells, Total Value of Share Sell
+                            sell_column_order = [
+                                'Max Sell Date',
+                                'Max Sell Value',
+                                'Number of Max Sell Shares',
+                                'Max Avg Sell',
+                                'Delta Shareholding Sell',
+                                'Total Share Sells',
+                                'Total Value of Share Sell'
+                            ]
+                            # Keep only columns that exist
+                            sell_cols_sorted = [col for col in sell_column_order if col in sell_columns]
+                            # Add any remaining sell columns that weren't in the predefined order
+                            remaining_sell_cols = [col for col in sell_columns if col not in sell_cols_sorted]
+                            sell_cols_sorted = sell_cols_sorted + sorted(remaining_sell_cols)
+                            
+                            column_order = ['COMPANY', 'SYMBOL'] + buy_cols_sorted + sell_cols_sorted + sorted(other_columns)
                             
                             # Reorder only columns that exist
                             column_order = [col for col in column_order if col in combined_summary.columns]
                             combined_summary = combined_summary[column_order]
+                            
+                            # Find column indices for max and avg columns to add styling
+                            # Group: Max Buy Date, Max Buy Value, Number of Max Buy Shares, Max Avg Buy
+                            max_buy_cols = ['Max Buy Date', 'Max Buy Value', 'Number of Max Buy Shares', 'Max Avg Buy']
+                            # Group: Max Sell Date, Max Sell Value, Number of Max Sell Shares, Max Avg Sell
+                            max_sell_cols = ['Max Sell Date', 'Max Sell Value', 'Number of Max Sell Shares', 'Max Avg Sell']
+                            
+                            # Get column indices (accounting for COMPANY and SYMBOL being first 2 columns)
+                            buy_max_indices = []
+                            sell_max_indices = []
+                            for i, col in enumerate(column_order):
+                                if col in max_buy_cols:
+                                    buy_max_indices.append(i + 1)  # +1 because nth-child is 1-indexed
+                                if col in max_sell_cols:
+                                    sell_max_indices.append(i + 1)
+                            
+                            # Add CSS styling for grouped columns
+                            if buy_max_indices or sell_max_indices:
+                                # Create CSS for each column individually
+                                buy_css = ""
+                                sell_css = ""
+                                
+                                if buy_max_indices:
+                                    buy_first = min(buy_max_indices)
+                                    buy_last = max(buy_max_indices)
+                                    # Generate CSS for all columns in the range
+                                    buy_selectors = ', '.join([f'div[data-testid="stDataFrame"] table thead tr th:nth-child({idx})' for idx in range(buy_first, buy_last + 1)])
+                                    buy_td_selectors = ', '.join([f'div[data-testid="stDataFrame"] table tbody tr td:nth-child({idx})' for idx in range(buy_first, buy_last + 1)])
+                                    
+                                    buy_css = f"""
+                                    /* Buy max/avg columns grouping */
+                                    {buy_selectors} {{
+                                        border-top: 3px solid #4CAF50 !important;
+                                        border-bottom: 3px solid #4CAF50 !important;
+                                        background-color: rgba(76, 175, 80, 0.15) !important;
+                                        font-weight: 600 !important;
+                                    }}
+                                    {buy_td_selectors} {{
+                                        border-left: 3px solid #4CAF50 !important;
+                                        border-right: 3px solid #4CAF50 !important;
+                                        background-color: rgba(76, 175, 80, 0.08) !important;
+                                    }}
+                                    div[data-testid="stDataFrame"] table thead tr th:nth-child({buy_first}) {{
+                                        border-left: 3px solid #4CAF50 !important;
+                                        border-top-left-radius: 5px !important;
+                                        border-bottom-left-radius: 5px !important;
+                                    }}
+                                    div[data-testid="stDataFrame"] table thead tr th:nth-child({buy_last}) {{
+                                        border-right: 3px solid #4CAF50 !important;
+                                        border-top-right-radius: 5px !important;
+                                        border-bottom-right-radius: 5px !important;
+                                    }}
+                                    div[data-testid="stDataFrame"] table tbody tr td:nth-child({buy_first}) {{
+                                        border-left: 3px solid #4CAF50 !important;
+                                    }}
+                                    div[data-testid="stDataFrame"] table tbody tr td:nth-child({buy_last}) {{
+                                        border-right: 3px solid #4CAF50 !important;
+                                    }}
+                                    """
+                                
+                                if sell_max_indices:
+                                    sell_first = min(sell_max_indices)
+                                    sell_last = max(sell_max_indices)
+                                    # Generate CSS for all columns in the range
+                                    sell_selectors = ', '.join([f'div[data-testid="stDataFrame"] table thead tr th:nth-child({idx})' for idx in range(sell_first, sell_last + 1)])
+                                    sell_td_selectors = ', '.join([f'div[data-testid="stDataFrame"] table tbody tr td:nth-child({idx})' for idx in range(sell_first, sell_last + 1)])
+                                    
+                                    sell_css = f"""
+                                    /* Sell max/avg columns grouping */
+                                    {sell_selectors} {{
+                                        border-top: 3px solid #FF9800 !important;
+                                        border-bottom: 3px solid #FF9800 !important;
+                                        background-color: rgba(255, 152, 0, 0.15) !important;
+                                        font-weight: 600 !important;
+                                    }}
+                                    {sell_td_selectors} {{
+                                        border-left: 3px solid #FF9800 !important;
+                                        border-right: 3px solid #FF9800 !important;
+                                        background-color: rgba(255, 152, 0, 0.08) !important;
+                                    }}
+                                    div[data-testid="stDataFrame"] table thead tr th:nth-child({sell_first}) {{
+                                        border-left: 3px solid #FF9800 !important;
+                                        border-top-left-radius: 5px !important;
+                                        border-bottom-left-radius: 5px !important;
+                                    }}
+                                    div[data-testid="stDataFrame"] table thead tr th:nth-child({sell_last}) {{
+                                        border-right: 3px solid #FF9800 !important;
+                                        border-top-right-radius: 5px !important;
+                                        border-bottom-right-radius: 5px !important;
+                                    }}
+                                    div[data-testid="stDataFrame"] table tbody tr td:nth-child({sell_first}) {{
+                                        border-left: 3px solid #FF9800 !important;
+                                    }}
+                                    div[data-testid="stDataFrame"] table tbody tr td:nth-child({sell_last}) {{
+                                        border-right: 3px solid #FF9800 !important;
+                                    }}
+                                    """
+                                
+                                st.markdown(
+                                    f"""
+                                    <style>
+                                    {buy_css}
+                                    {sell_css}
+                                    </style>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
                             
                             # Display the combined summary
                             st.dataframe(
