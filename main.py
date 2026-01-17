@@ -44,6 +44,49 @@ REQUIRED_COLUMNS = [
 
 # Title
 st.title("📊 CSV Uploader & Data Viewer")
+
+# Source link with animation
+st.markdown(
+    """
+    <style>
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+    .source-link {
+        display: inline-block;
+        padding: 8px 16px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white !important;
+        text-decoration: none;
+        border-radius: 20px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        animation: pulse 2s ease-in-out infinite;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+    }
+    .source-link:hover {
+        transform: scale(1.05);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        animation: none;
+    }
+    .source-container {
+        text-align: center;
+        margin: 10px 0;
+    }
+    </style>
+    <div class="source-container">
+        <a href="https://www.nseindia.com/companies-listing/corporate-filings-insider-trading" 
+           target="_blank" 
+           class="source-link">
+            🔗 Data Source: NSE India - Corporate Filings Insider Trading
+        </a>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 st.markdown("---")
 
 # Initialize session state for storing dataframe
