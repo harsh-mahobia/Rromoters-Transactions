@@ -2,6 +2,62 @@ import streamlit as st
 import pandas as pd
 import io
 
+# Function to format numbers in Indian currency standard
+def format_indian_number(num):
+    """
+    Format numbers according to Indian numbering system:
+    - Thousand: 1,000
+    - Lakh: 1,00,000
+    - Crore: 1,00,00,000
+    """
+    if pd.isna(num):
+        return num
+    
+    try:
+        num = float(num)
+        if num == 0:
+            return "0"
+        
+        # Determine if negative
+        is_negative = num < 0
+        num = abs(num)
+        
+        # Split into integer and decimal parts
+        num_str = f"{num:.2f}"
+        integer_part, decimal_part = num_str.split('.')
+        
+        # Remove trailing zeros from decimal
+        decimal_part = decimal_part.rstrip('0').rstrip('.')
+        
+        # Format integer part with Indian commas
+        if len(integer_part) <= 3:
+            formatted = integer_part
+        else:
+            # Last 3 digits
+            last_three = integer_part[-3:]
+            remaining = integer_part[:-3]
+            
+            # Add commas every 2 digits from right to left for remaining digits
+            formatted_remaining = ''
+            for i, digit in enumerate(reversed(remaining)):
+                if i > 0 and i % 2 == 0:
+                    formatted_remaining = ',' + formatted_remaining
+                formatted_remaining = digit + formatted_remaining
+            
+            formatted = formatted_remaining + ',' + last_three
+        
+        # Add decimal part if exists
+        if decimal_part:
+            formatted = formatted + '.' + decimal_part
+        
+        # Add negative sign if needed
+        if is_negative:
+            formatted = '-' + formatted
+        
+        return formatted
+    except (ValueError, TypeError):
+        return num
+
 # Page configuration
 st.set_page_config(
     page_title="CSV Uploader & Viewer",
@@ -283,9 +339,15 @@ if uploaded_file is not None:
             # Show data info
             st.info(f"Showing {len(filtered_df)} rows and {len(filtered_df.columns)} columns")
             
+            # Format numeric columns with Indian currency standard
+            filtered_df_formatted = filtered_df.copy()
+            numeric_columns = filtered_df.select_dtypes(include=['int64', 'float64']).columns
+            for col in numeric_columns:
+                filtered_df_formatted[col] = filtered_df[col].apply(format_indian_number)
+            
             # Display dataframe
             st.dataframe(
-                filtered_df,
+                filtered_df_formatted,
                 use_container_width=True,
                 height=400
             )
@@ -758,9 +820,15 @@ if uploaded_file is not None:
                                     unsafe_allow_html=True
                                 )
                             
+                            # Format numeric columns with Indian currency standard
+                            combined_summary_formatted = combined_summary.copy()
+                            numeric_columns = combined_summary.select_dtypes(include=['int64', 'float64']).columns
+                            for col in numeric_columns:
+                                combined_summary_formatted[col] = combined_summary[col].apply(format_indian_number)
+                            
                             # Display the combined summary
                             st.dataframe(
-                                combined_summary,
+                                combined_summary_formatted,
                                 use_container_width=True,
                                 hide_index=True
                             )
@@ -780,9 +848,15 @@ if uploaded_file is not None:
                             # If max transactions calculation fails, just show transactions summary
                             st.warning(f"⚠️ Could not calculate max transactions: {str(e)}. Showing transactions summary only.")
                             
+                            # Format numeric columns with Indian currency standard
+                            transactions_summary_formatted = transactions_summary.copy()
+                            numeric_columns = transactions_summary.select_dtypes(include=['int64', 'float64']).columns
+                            for col in numeric_columns:
+                                transactions_summary_formatted[col] = transactions_summary[col].apply(format_indian_number)
+                            
                             # Display the transactions summary
                             st.dataframe(
-                                transactions_summary,
+                                transactions_summary_formatted,
                                 use_container_width=True,
                                 hide_index=True
                             )
