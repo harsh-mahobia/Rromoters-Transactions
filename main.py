@@ -363,9 +363,9 @@ if uploaded_file is not None:
                             'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum',
                             'Shareholding Delta': 'sum'
                         }).reset_index()
-                        buy_summary.columns = ['COMPANY', 'Number of Shares Buy', 'Value of Shares Buy', 'Delta Shareholding Buy']
+                        buy_summary.columns = ['COMPANY', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy']
                     else:
-                        buy_summary = pd.DataFrame(columns=['COMPANY', 'Number of Shares Buy', 'Value of Shares Buy', 'Delta Shareholding Buy'])
+                        buy_summary = pd.DataFrame(columns=['COMPANY', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy'])
                     
                     # Calculate totals by company for Sell transactions
                     if len(sell_data) > 0:
@@ -374,9 +374,9 @@ if uploaded_file is not None:
                             'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum',
                             'Shareholding Delta': 'sum'
                         }).reset_index()
-                        sell_summary.columns = ['COMPANY', 'Number of Shares Sell', 'Value of Shares Sell', 'Delta Shareholding Sell']
+                        sell_summary.columns = ['COMPANY', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell']
                     else:
-                        sell_summary = pd.DataFrame(columns=['COMPANY', 'Number of Shares Sell', 'Value of Shares Sell', 'Delta Shareholding Sell'])
+                        sell_summary = pd.DataFrame(columns=['COMPANY', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell'])
                     
                     # Merge buy and sell summaries
                     if len(buy_summary) > 0 and len(sell_summary) > 0:
@@ -388,47 +388,233 @@ if uploaded_file is not None:
                         ).fillna(0)
                     elif len(buy_summary) > 0:
                         transactions_summary = buy_summary.copy()
-                        transactions_summary['Number of Shares Sell'] = 0
-                        transactions_summary['Value of Shares Sell'] = 0
+                        transactions_summary['Total Share Sells'] = 0
+                        transactions_summary['Total Value of Share Sell'] = 0
                         transactions_summary['Delta Shareholding Sell'] = 0
                     elif len(sell_summary) > 0:
                         transactions_summary = sell_summary.copy()
-                        transactions_summary['Number of Shares Buy'] = 0
-                        transactions_summary['Value of Shares Buy'] = 0
+                        transactions_summary['Total Share Buys'] = 0
+                        transactions_summary['Total Value of Share Buy'] = 0
                         transactions_summary['Delta Shareholding Buy'] = 0
                     else:
-                        transactions_summary = pd.DataFrame(columns=['COMPANY', 'Number of Shares Buy', 'Value of Shares Buy', 'Delta Shareholding Buy', 'Number of Shares Sell', 'Value of Shares Sell', 'Delta Shareholding Sell'])
+                        transactions_summary = pd.DataFrame(columns=['COMPANY', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell'])
                     
                     if len(transactions_summary) > 0:
                         # Sort by company name
                         transactions_summary = transactions_summary.sort_values('COMPANY').reset_index(drop=True)
                         
                         # Format the numbers for better display
-                        transactions_summary['Number of Shares Buy'] = transactions_summary['Number of Shares Buy'].fillna(0).astype(int)
-                        transactions_summary['Number of Shares Sell'] = transactions_summary['Number of Shares Sell'].fillna(0).astype(int)
-                        transactions_summary['Value of Shares Buy'] = transactions_summary['Value of Shares Buy'].fillna(0).round(2)
-                        transactions_summary['Value of Shares Sell'] = transactions_summary['Value of Shares Sell'].fillna(0).round(2)
+                        transactions_summary['Total Share Buys'] = transactions_summary['Total Share Buys'].fillna(0).astype(int)
+                        transactions_summary['Total Share Sells'] = transactions_summary['Total Share Sells'].fillna(0).astype(int)
+                        transactions_summary['Total Value of Share Buy'] = transactions_summary['Total Value of Share Buy'].fillna(0).round(2)
+                        transactions_summary['Total Value of Share Sell'] = transactions_summary['Total Value of Share Sell'].fillna(0).round(2)
                         transactions_summary['Delta Shareholding Buy'] = transactions_summary['Delta Shareholding Buy'].fillna(0).round(4)
                         transactions_summary['Delta Shareholding Sell'] = transactions_summary['Delta Shareholding Sell'].fillna(0).round(4)
                         
-                        # Display the transactions summary
-                        st.dataframe(
-                            transactions_summary,
-                            use_container_width=True,
-                            hide_index=True
-                        )
-                        
-                        # Download button for transactions summary
-                        transactions_csv_buffer = io.StringIO()
-                        transactions_summary.to_csv(transactions_csv_buffer, index=False)
-                        transactions_csv_string = transactions_csv_buffer.getvalue()
-                        
-                        st.download_button(
-                            label="📥 Download Transactions Summary as CSV",
-                            data=transactions_csv_string,
-                            file_name="transactions_summary.csv",
-                            mime="text/csv"
-                        )
+                        # Now calculate Max Transactions and merge with transactions_summary
+                        try:
+                            # Prepare data for max transactions analysis
+                            max_transactions_df = transactions_df.copy()
+                            
+                            # Separate buy and sell transactions
+                            transaction_type_upper_max = max_transactions_df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.upper()
+                            buy_data_max = max_transactions_df[transaction_type_upper_max == 'BUY'].copy()
+                            sell_data_max = max_transactions_df[transaction_type_upper_max == 'SELL'].copy()
+                            
+                            max_transactions_list = []
+                            
+                            # Get unique companies
+                            unique_companies = max_transactions_df['COMPANY'].unique()
+                            
+                            for company in unique_companies:
+                                company_buy = buy_data_max[buy_data_max['COMPANY'] == company]
+                                company_sell = sell_data_max[sell_data_max['COMPANY'] == company]
+                                
+                                max_transaction = {'COMPANY': company}
+                                
+                                # Max Buy Value, Number of Max Buy Shares, and Date (single date for both)
+                                if len(company_buy) > 0:
+                                    buy_value_col = company_buy['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
+                                    buy_shares_col = company_buy['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                                    
+                                    # Find max value
+                                    if buy_value_col.notna().any():
+                                        max_buy_idx = buy_value_col.idxmax()
+                                        if pd.notna(max_buy_idx):
+                                            max_transaction['Max Buy Value'] = company_buy.loc[max_buy_idx, 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
+                                        else:
+                                            max_transaction['Max Buy Value'] = None
+                                    else:
+                                        max_transaction['Max Buy Value'] = None
+                                    
+                                    # Find max shares (if tied, choose one with highest value)
+                                    if buy_shares_col.notna().any():
+                                        max_shares_value = buy_shares_col.max()
+                                        # Find all rows with max shares
+                                        max_shares_rows = company_buy[buy_shares_col == max_shares_value]
+                                        if len(max_shares_rows) > 0:
+                                            # Among rows with max shares, find the one with max value
+                                            max_value_in_max_shares = max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'].max()
+                                            if pd.notna(max_value_in_max_shares):
+                                                max_shares_max_value_rows = max_shares_rows[
+                                                    max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] == max_value_in_max_shares
+                                                ]
+                                                # Check if we have any rows after filtering
+                                                if len(max_shares_max_value_rows) > 0:
+                                                    # Get the first row - use this date for both value and shares
+                                                    max_buy_shares_idx = max_shares_max_value_rows.index[0]
+                                                    max_transaction['Number of Max Buy Shares'] = company_buy.loc[max_buy_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                                                    max_transaction['Max Buy Date'] = company_buy.loc[max_buy_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
+                                                else:
+                                                    max_transaction['Number of Max Buy Shares'] = None
+                                                    max_transaction['Max Buy Date'] = None
+                                            else:
+                                                max_transaction['Number of Max Buy Shares'] = None
+                                                max_transaction['Max Buy Date'] = None
+                                        else:
+                                            max_transaction['Number of Max Buy Shares'] = None
+                                            max_transaction['Max Buy Date'] = None
+                                    else:
+                                        max_transaction['Number of Max Buy Shares'] = None
+                                        max_transaction['Max Buy Date'] = None
+                                else:
+                                    max_transaction['Max Buy Value'] = None
+                                    max_transaction['Number of Max Buy Shares'] = None
+                                    max_transaction['Max Buy Date'] = None
+                                
+                                # Max Sell Value, Number of Max Sell Shares, and Date (single date for both)
+                                if len(company_sell) > 0:
+                                    sell_value_col = company_sell['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
+                                    sell_shares_col = company_sell['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                                    
+                                    # Find max value
+                                    if sell_value_col.notna().any():
+                                        max_sell_idx = sell_value_col.idxmax()
+                                        if pd.notna(max_sell_idx):
+                                            max_transaction['Max Sell Value'] = company_sell.loc[max_sell_idx, 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
+                                        else:
+                                            max_transaction['Max Sell Value'] = None
+                                    else:
+                                        max_transaction['Max Sell Value'] = None
+                                    
+                                    # Find max shares (if tied, choose one with highest value)
+                                    if sell_shares_col.notna().any():
+                                        max_shares_value = sell_shares_col.max()
+                                        # Find all rows with max shares
+                                        max_shares_rows = company_sell[sell_shares_col == max_shares_value]
+                                        if len(max_shares_rows) > 0:
+                                            # Among rows with max shares, find the one with max value
+                                            max_value_in_max_shares = max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'].max()
+                                            if pd.notna(max_value_in_max_shares):
+                                                max_shares_max_value_rows = max_shares_rows[
+                                                    max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] == max_value_in_max_shares
+                                                ]
+                                                # Check if we have any rows after filtering
+                                                if len(max_shares_max_value_rows) > 0:
+                                                    # Get the first row - use this date for both value and shares
+                                                    max_sell_shares_idx = max_shares_max_value_rows.index[0]
+                                                    max_transaction['Number of Max Sell Shares'] = company_sell.loc[max_sell_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                                                    max_transaction['Max Sell Date'] = company_sell.loc[max_sell_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
+                                                else:
+                                                    max_transaction['Number of Max Sell Shares'] = None
+                                                    max_transaction['Max Sell Date'] = None
+                                            else:
+                                                max_transaction['Number of Max Sell Shares'] = None
+                                                max_transaction['Max Sell Date'] = None
+                                        else:
+                                            max_transaction['Number of Max Sell Shares'] = None
+                                            max_transaction['Max Sell Date'] = None
+                                    else:
+                                        max_transaction['Number of Max Sell Shares'] = None
+                                        max_transaction['Max Sell Date'] = None
+                                else:
+                                    max_transaction['Max Sell Value'] = None
+                                    max_transaction['Number of Max Sell Shares'] = None
+                                    max_transaction['Max Sell Date'] = None
+                                
+                                max_transactions_list.append(max_transaction)
+                            
+                            # Create max transactions dataframe
+                            max_transactions_summary = pd.DataFrame(max_transactions_list)
+                            max_transactions_summary = max_transactions_summary.sort_values('COMPANY').reset_index(drop=True)
+                            
+                            # Format the numbers for max transactions
+                            if 'Max Buy Value' in max_transactions_summary.columns:
+                                max_transactions_summary['Max Buy Value'] = max_transactions_summary['Max Buy Value'].fillna(0).round(2)
+                            if 'Number of Max Buy Shares' in max_transactions_summary.columns:
+                                max_transactions_summary['Number of Max Buy Shares'] = max_transactions_summary['Number of Max Buy Shares'].fillna(0).astype(int)
+                            if 'Max Sell Value' in max_transactions_summary.columns:
+                                max_transactions_summary['Max Sell Value'] = max_transactions_summary['Max Sell Value'].fillna(0).round(2)
+                            if 'Number of Max Sell Shares' in max_transactions_summary.columns:
+                                max_transactions_summary['Number of Max Sell Shares'] = max_transactions_summary['Number of Max Sell Shares'].fillna(0).astype(int)
+                            if 'Max Buy Date' in max_transactions_summary.columns:
+                                max_transactions_summary['Max Buy Date'] = max_transactions_summary['Max Buy Date'].fillna('N/A')
+                            if 'Max Sell Date' in max_transactions_summary.columns:
+                                max_transactions_summary['Max Sell Date'] = max_transactions_summary['Max Sell Date'].fillna('N/A')
+                            
+                            # Merge transactions_summary with max_transactions_summary
+                            combined_summary = pd.merge(
+                                transactions_summary,
+                                max_transactions_summary,
+                                on='COMPANY',
+                                how='outer'
+                            )
+                            
+                            # Sort by company name
+                            combined_summary = combined_summary.sort_values('COMPANY').reset_index(drop=True)
+                            
+                            # Reorder columns: COMPANY first, then all Buy columns, then all Sell columns
+                            buy_columns = [col for col in combined_summary.columns if 'Buy' in col]
+                            sell_columns = [col for col in combined_summary.columns if 'Sell' in col]
+                            other_columns = [col for col in combined_summary.columns if col not in ['COMPANY'] + buy_columns + sell_columns]
+                            
+                            # Create the desired column order
+                            column_order = ['COMPANY'] + sorted(buy_columns) + sorted(sell_columns) + sorted(other_columns)
+                            
+                            # Reorder only columns that exist
+                            column_order = [col for col in column_order if col in combined_summary.columns]
+                            combined_summary = combined_summary[column_order]
+                            
+                            # Display the combined summary
+                            st.dataframe(
+                                combined_summary,
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                            
+                            # Download button for combined summary
+                            combined_csv_buffer = io.StringIO()
+                            combined_summary.to_csv(combined_csv_buffer, index=False)
+                            combined_csv_string = combined_csv_buffer.getvalue()
+                            
+                            st.download_button(
+                                label="📥 Download Combined Transactions & Max Transactions Summary as CSV",
+                                data=combined_csv_string,
+                                file_name="combined_transactions_summary.csv",
+                                mime="text/csv"
+                            )
+                        except Exception as e:
+                            # If max transactions calculation fails, just show transactions summary
+                            st.warning(f"⚠️ Could not calculate max transactions: {str(e)}. Showing transactions summary only.")
+                            
+                            # Display the transactions summary
+                            st.dataframe(
+                                transactions_summary,
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                            
+                            # Download button for transactions summary
+                            transactions_csv_buffer = io.StringIO()
+                            transactions_summary.to_csv(transactions_csv_buffer, index=False)
+                            transactions_csv_string = transactions_csv_buffer.getvalue()
+                            
+                            st.download_button(
+                                label="📥 Download Transactions Summary as CSV",
+                                data=transactions_csv_string,
+                                file_name="transactions_summary.csv",
+                                mime="text/csv"
+                            )
                     else:
                         st.info("No transaction data available to display.")
                 
@@ -442,206 +628,6 @@ if uploaded_file is not None:
         else:
             st.info("No data available for transactions analysis.")
         
-        # Max Transactions Section
-        st.markdown("---")
-        st.subheader("📊 Max Transactions")
-        
-        if len(df) > 0:
-            try:
-                # Check if required columns exist
-                required_cols_max = ['COMPANY', 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)', 
-                                   'VALUE OF SECURITY (ACQUIRED/DISPLOSED)', 
-                                   'ACQUISITION/DISPOSAL TRANSACTION TYPE',
-                                   'DATE OF ALLOTMENT/ACQUISITION FROM']
-                missing_cols_max = [col for col in required_cols_max if col not in df.columns]
-                
-                if missing_cols_max:
-                    st.error(f"❌ Missing required columns for max transactions analysis: {', '.join(missing_cols_max)}")
-                    st.info(f"Available columns: {', '.join(sorted(df.columns.tolist()))}")
-                else:
-                    # Prepare data for max transactions analysis
-                    max_transactions_df = df.copy()
-                    
-                    # Convert numeric columns
-                    max_transactions_df['NO. OF SECURITIES (ACQUIRED/DISPLOSED)'] = pd.to_numeric(
-                        max_transactions_df['NO. OF SECURITIES (ACQUIRED/DISPLOSED)'], 
-                        errors='coerce'
-                    )
-                    max_transactions_df['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] = pd.to_numeric(
-                        max_transactions_df['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'], 
-                        errors='coerce'
-                    )
-                    
-                    # Separate buy and sell transactions
-                    transaction_type_upper = max_transactions_df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.upper()
-                    buy_data_max = max_transactions_df[transaction_type_upper == 'BUY'].copy()
-                    sell_data_max = max_transactions_df[transaction_type_upper == 'SELL'].copy()
-                    
-                    max_transactions_list = []
-                    
-                    # Get unique companies
-                    unique_companies = max_transactions_df['COMPANY'].unique()
-                    
-                    for company in unique_companies:
-                        company_buy = buy_data_max[buy_data_max['COMPANY'] == company]
-                        company_sell = sell_data_max[sell_data_max['COMPANY'] == company]
-                        
-                        max_transaction = {'COMPANY': company}
-                        
-                        # Max Buy Value, Number of Max Buy Shares, and Date (single date for both)
-                        if len(company_buy) > 0:
-                            buy_value_col = company_buy['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
-                            buy_shares_col = company_buy['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                            
-                            # Find max value
-                            if buy_value_col.notna().any():
-                                max_buy_idx = buy_value_col.idxmax()
-                                if pd.notna(max_buy_idx):
-                                    max_transaction['Max Buy Value'] = company_buy.loc[max_buy_idx, 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
-                                else:
-                                    max_transaction['Max Buy Value'] = None
-                            else:
-                                max_transaction['Max Buy Value'] = None
-                            
-                            # Find max shares (if tied, choose one with highest value)
-                            if buy_shares_col.notna().any():
-                                max_shares_value = buy_shares_col.max()
-                                # Find all rows with max shares
-                                max_shares_rows = company_buy[buy_shares_col == max_shares_value]
-                                if len(max_shares_rows) > 0:
-                                    # Among rows with max shares, find the one with max value
-                                    max_value_in_max_shares = max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'].max()
-                                    if pd.notna(max_value_in_max_shares):
-                                        max_shares_max_value_rows = max_shares_rows[
-                                            max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] == max_value_in_max_shares
-                                        ]
-                                        # Check if we have any rows after filtering
-                                        if len(max_shares_max_value_rows) > 0:
-                                            # Get the first row - use this date for both value and shares
-                                            max_buy_shares_idx = max_shares_max_value_rows.index[0]
-                                            max_transaction['Number of Max Buy Shares'] = company_buy.loc[max_buy_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                                            max_transaction['Max Buy Date'] = company_buy.loc[max_buy_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
-                                        else:
-                                            max_transaction['Number of Max Buy Shares'] = None
-                                            max_transaction['Max Buy Date'] = None
-                                    else:
-                                        max_transaction['Number of Max Buy Shares'] = None
-                                        max_transaction['Max Buy Date'] = None
-                                else:
-                                    max_transaction['Number of Max Buy Shares'] = None
-                                    max_transaction['Max Buy Date'] = None
-                            else:
-                                max_transaction['Number of Max Buy Shares'] = None
-                                max_transaction['Max Buy Date'] = None
-                        else:
-                            max_transaction['Max Buy Value'] = None
-                            max_transaction['Number of Max Buy Shares'] = None
-                            max_transaction['Max Buy Date'] = None
-                        
-                        # Max Sell Value, Number of Max Sell Shares, and Date (single date for both)
-                        if len(company_sell) > 0:
-                            sell_value_col = company_sell['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
-                            sell_shares_col = company_sell['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                            
-                            # Find max value
-                            if sell_value_col.notna().any():
-                                max_sell_idx = sell_value_col.idxmax()
-                                if pd.notna(max_sell_idx):
-                                    max_transaction['Max Sell Value'] = company_sell.loc[max_sell_idx, 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
-                                else:
-                                    max_transaction['Max Sell Value'] = None
-                            else:
-                                max_transaction['Max Sell Value'] = None
-                            
-                            # Find max shares (if tied, choose one with highest value)
-                            if sell_shares_col.notna().any():
-                                max_shares_value = sell_shares_col.max()
-                                # Find all rows with max shares
-                                max_shares_rows = company_sell[sell_shares_col == max_shares_value]
-                                if len(max_shares_rows) > 0:
-                                    # Among rows with max shares, find the one with max value
-                                    max_value_in_max_shares = max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'].max()
-                                    if pd.notna(max_value_in_max_shares):
-                                        max_shares_max_value_rows = max_shares_rows[
-                                            max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] == max_value_in_max_shares
-                                        ]
-                                        # Check if we have any rows after filtering
-                                        if len(max_shares_max_value_rows) > 0:
-                                            # Get the first row - use this date for both value and shares
-                                            max_sell_shares_idx = max_shares_max_value_rows.index[0]
-                                            max_transaction['Number of Max Sell Shares'] = company_sell.loc[max_sell_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                                            max_transaction['Max Sell Date'] = company_sell.loc[max_sell_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
-                                        else:
-                                            max_transaction['Number of Max Sell Shares'] = None
-                                            max_transaction['Max Sell Date'] = None
-                                    else:
-                                        max_transaction['Number of Max Sell Shares'] = None
-                                        max_transaction['Max Sell Date'] = None
-                                else:
-                                    max_transaction['Number of Max Sell Shares'] = None
-                                    max_transaction['Max Sell Date'] = None
-                            else:
-                                max_transaction['Number of Max Sell Shares'] = None
-                                max_transaction['Max Sell Date'] = None
-                        else:
-                            max_transaction['Max Sell Value'] = None
-                            max_transaction['Number of Max Sell Shares'] = None
-                            max_transaction['Max Sell Date'] = None
-                        
-                        max_transactions_list.append(max_transaction)
-                    
-                    # Create dataframe
-                    max_transactions_summary = pd.DataFrame(max_transactions_list)
-                    max_transactions_summary = max_transactions_summary.sort_values('COMPANY').reset_index(drop=True)
-                    
-                    # Format the numbers
-                    if 'Max Buy Value' in max_transactions_summary.columns:
-                        max_transactions_summary['Max Buy Value'] = max_transactions_summary['Max Buy Value'].fillna(0).round(2)
-                    if 'Number of Max Buy Shares' in max_transactions_summary.columns:
-                        max_transactions_summary['Number of Max Buy Shares'] = max_transactions_summary['Number of Max Buy Shares'].fillna(0).astype(int)
-                    if 'Max Sell Value' in max_transactions_summary.columns:
-                        max_transactions_summary['Max Sell Value'] = max_transactions_summary['Max Sell Value'].fillna(0).round(2)
-                    if 'Number of Max Sell Shares' in max_transactions_summary.columns:
-                        max_transactions_summary['Number of Max Sell Shares'] = max_transactions_summary['Number of Max Sell Shares'].fillna(0).astype(int)
-                    
-                    # Display the max transactions summary
-                    if len(max_transactions_summary) > 0:
-                        st.dataframe(
-                            max_transactions_summary,
-                            use_container_width=True,
-                            hide_index=True
-                        )
-                        
-                        # Download button for max transactions summary
-                        max_transactions_csv_buffer = io.StringIO()
-                        max_transactions_summary.to_csv(max_transactions_csv_buffer, index=False)
-                        max_transactions_csv_string = max_transactions_csv_buffer.getvalue()
-                        
-                        st.download_button(
-                            label="📥 Download Max Transactions Summary as CSV",
-                            data=max_transactions_csv_string,
-                            file_name="max_transactions_summary.csv",
-                            mime="text/csv"
-                        )
-                    else:
-                        st.info("No max transaction data available to display.")
-                        
-            except KeyError as e:
-                # Better error message extraction
-                error_msg = str(e)
-                if "'" in error_msg:
-                    missing_col = error_msg.strip("'\"")
-                else:
-                    missing_col = error_msg
-                st.error(f"❌ Missing required column for max transactions analysis: {missing_col}")
-                st.info(f"Available columns: {', '.join(sorted(df.columns.tolist()))}")
-                st.error(f"Full error details: {repr(e)}")
-            except Exception as e:
-                st.error(f"❌ Error generating max transactions analytics: {str(e)}")
-                st.error(f"Error type: {type(e).__name__}")
-                st.info("Please ensure the data contains valid numeric values and dates.")
-                import traceback
-                st.code(traceback.format_exc())
         
         # Additional information section
         with st.expander("📊 Data Statistics"):
