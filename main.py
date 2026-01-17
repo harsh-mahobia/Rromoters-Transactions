@@ -423,6 +423,9 @@ if uploaded_file is not None:
                         transactions_summary['Delta Shareholding Buy'] = transactions_summary['Delta Shareholding Buy'].fillna(0).round(4)
                         transactions_summary['Delta Shareholding Sell'] = transactions_summary['Delta Shareholding Sell'].fillna(0).round(4)
                         
+                        # Filter out companies where Total Value of Share Buy is less than 9,000,000
+                        transactions_summary = transactions_summary[transactions_summary['Total Value of Share Buy'] >= 9000000]
+                        
                         # Now calculate Max Transactions and merge with transactions_summary
                         try:
                             # Prepare data for max transactions analysis
@@ -571,6 +574,10 @@ if uploaded_file is not None:
                                 on='COMPANY',
                                 how='outer'
                             )
+                            
+                            # Filter out companies where Total Value of Share Buy is less than 9,000,000
+                            if 'Total Value of Share Buy' in combined_summary.columns:
+                                combined_summary = combined_summary[combined_summary['Total Value of Share Buy'] >= 9000000]
                             
                             # Sort by company name
                             combined_summary = combined_summary.sort_values('COMPANY').reset_index(drop=True)
