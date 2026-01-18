@@ -644,6 +644,49 @@ if uploaded_file is not None:
                                 on='COMPANY',
                                 how='outer'
                             )
+
+                            # Merge with external fundamentals file
+                            try:
+                                fundamentals_path = "All Name.17-01-2026.Default.csv"
+                                # Check if file exists in current directory or use absolute path
+                                import os
+                                if not os.path.exists(fundamentals_path):
+                                    # Try looking in the script's directory
+                                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                                    fundamentals_path = os.path.join(script_dir, "All Name.17-01-2026.Default.csv")
+
+                                if os.path.exists(fundamentals_path):
+                                    fundamentals_df = pd.read_csv(fundamentals_path)
+                                    
+                                    # Extract symbol from companyId (e.g., "NSE:20MICRONS" -> "20MICRONS")
+                                    # The user specified "company ID is NSE:Company Name", implying the suffix is the identifier to match
+                                    fundamentals_df['Temp_Symbol_Match'] = fundamentals_df['companyId'].astype(str).str.split(':').str[-1]
+                                    
+                                    # Convert to string and strip just in case
+                                    fundamentals_df['Temp_Symbol_Match'] = fundamentals_df['Temp_Symbol_Match'].str.strip()
+                                    if 'SYMBOL' in combined_summary.columns:
+                                        combined_summary['SYMBOL_Match'] = combined_summary['SYMBOL'].astype(str).str.strip()
+                                        
+                                        # Merge
+                                        combined_summary = pd.merge(
+                                            combined_summary,
+                                            fundamentals_df,
+                                            left_on='SYMBOL_Match',
+                                            right_on='Temp_Symbol_Match',
+                                            how='left'
+                                        )
+                                        
+                                        # Drop helper columns
+                                        drop_cols = ['Temp_Symbol_Match', 'SYMBOL_Match']
+                                        combined_summary = combined_summary.drop(columns=[c for c in drop_cols if c in combined_summary.columns])
+                                        
+                                        st.success(f"✅ Successfully merged data from {os.path.basename(fundamentals_path)}")
+                                    else:
+                                        st.warning("⚠️ SYMBOL column missing in transactions data, cannot merge fundamentals.")
+                                else:
+                                    st.warning(f"⚠️ Could not find file: {fundamentals_path}")
+                            except Exception as e:
+                                st.warning(f"⚠️ Error merging fundamentals file: {e}")
                             
                             # Filter out companies where Total Value of Share Buy is less than 9,000,000
                             if 'Total Value of Share Buy' in combined_summary.columns:
