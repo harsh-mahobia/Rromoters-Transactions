@@ -647,7 +647,7 @@ if uploaded_file is not None:
 
                             # Merge with external fundamentals file
                             try:
-                                fundamentals_path = "All Name.17-01-2026.Default.csv"
+                                fundamentals_path = "All Name.11-02-2026.Technical.csv"
                                 # Check if file exists in current directory or use absolute path
                                 import os
                                 if not os.path.exists(fundamentals_path):
