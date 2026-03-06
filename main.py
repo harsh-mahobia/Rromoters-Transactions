@@ -154,831 +154,214 @@ st.markdown(
 
 st.markdown("---")
 
-# Initialize session state for storing dataframe
-if 'df' not in st.session_state:
-    st.session_state.df = None
+# Initialize session state for persistent storage
+if 'df_main' not in st.session_state: st.session_state.df_main = None
+if 'combined_summary' not in st.session_state: st.session_state.combined_summary = None
+if 'filter_info_text' not in st.session_state: st.session_state.filter_info_text = None
+if 'last_processed_files' not in st.session_state: st.session_state.last_processed_files = (None, None)
+if 'buy_max_indices' not in st.session_state: st.session_state.buy_max_indices = []
+if 'sell_max_indices' not in st.session_state: st.session_state.sell_max_indices = []
 
 # File uploader
 col1, col2 = st.columns(2)
 with col1:
-    uploaded_file = st.file_uploader(
-        "1. Choose Transactions CSV file",
-        type=['csv'],
-        help="Upload the primary transaction CSV file"
-    )
-
+    uploaded_file = st.file_uploader("1. Choose Transactions CSV file", type=['csv'], help="Upload the primary transaction CSV file")
 with col2:
-    fundamentals_file = st.file_uploader(
-        "2. Choose Fundamentals CSV file (Optional)",
-        type=['csv'],
-        help="Upload a fundamentals CSV file to merge with the transactions"
-    )
+    fundamentals_file = st.file_uploader("2. Choose Fundamentals CSV file (Optional)", type=['csv'], help="Upload a fundamentals CSV file")
 
-# Process uploaded file
-if uploaded_file is not None:
+# Track file changes to avoid redundant heavy processing
+uploaded_id = f"{uploaded_file.name}_{uploaded_file.size}" if uploaded_file else None
+fundamentals_id = f"{fundamentals_file.name}_{fundamentals_file.size}" if fundamentals_file else None
+current_files = (uploaded_id, fundamentals_id)
+
+files_changed = uploaded_file is not None and current_files != st.session_state.last_processed_files
+
+# --- PROCESSING SECTION ---
+if files_changed:
     try:
-        # Read CSV file
-        df = pd.read_csv(uploaded_file)
-        
-        # Clean column names (strip whitespace)
-        df.columns = df.columns.str.strip()
-        
-        # Validate columns
-        uploaded_columns = set(df.columns)
-        required_columns_set = set(REQUIRED_COLUMNS)
-        
-        # Check if all required columns are present
-        missing_columns = required_columns_set - uploaded_columns
-        extra_columns = uploaded_columns - required_columns_set
-        
-        if missing_columns:
-            st.error(f"❌ Invalid CSV file! Missing required columns: {', '.join(sorted(missing_columns))}")
-            st.warning(f"📋 Required columns ({len(REQUIRED_COLUMNS)}):")
-            st.code('\n'.join([f"{i+1}. {col}" for i, col in enumerate(REQUIRED_COLUMNS)]))
-            st.stop()
-        
-        if extra_columns:
-            st.warning(f"⚠️ File contains extra columns that will be ignored: {', '.join(sorted(extra_columns))}")
-            # Keep only required columns
+        with st.spinner("Processing files and calculating analytics..."):
+            # 1. Read and Initial Clean
+            df = pd.read_csv(uploaded_file)
+            df.columns = df.columns.str.strip()
+            if not set(REQUIRED_COLUMNS).issubset(set(df.columns)):
+                st.error("❌ Missing required columns in uploaded CSV.")
+                st.stop()
             df = df[REQUIRED_COLUMNS]
-        
-        # Ensure columns are in the correct order
-        df = df[REQUIRED_COLUMNS]
-        
-        # Store original dataframe for reference
-        original_count = len(df)
-        
-        # Apply automatic filters
-        # Filter 1: Remove REGULATION of type 7(3) (handle whitespace)
-        df = df[df['REGULATION'].astype(str).str.strip() != '7(3)']
-        regulation_filtered_count = len(df)
-        
-        #TODO: anything after promoter should be there.
-        # Filter 2: Only keep CATEGORY OF PERSON as "Promoter Group" or "Promoters"
-        # Case-insensitive matching, handle NaN values
-        df = df[df['CATEGORY OF PERSON'].notna() & 
-                df['CATEGORY OF PERSON'].astype(str).str.strip().str.lower().isin(['promoter group', 'promoters'])]
-        category_filtered_count = len(df)
-        
-        # Filter 3: Only keep ACQUISITION/DISPOSAL TRANSACTION TYPE as "Buy" or "Sell"
-        # Case-insensitive matching, handle NaN values
-        df = df[df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].notna() & 
-                df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.lower().isin(['buy', 'sell'])]
-        transaction_filtered_count = len(df)
-        
-        # Filter 4: Only keep MODE OF ACQUISITION as "Market Sale" or "Market Purchase"
-        # Case-insensitive matching, handle NaN values
-        df = df[df['MODE OF ACQUISITION'].notna() & 
-                df['MODE OF ACQUISITION'].astype(str).str.strip().str.lower().isin(['market sale', 'market purchase'])]
-        mode_filtered_count = len(df)
-        
-        # Filter 5: Only keep TYPE OF SECURITY (PRIOR) as "Equity Shares"
-        # Case-insensitive matching, handle NaN values and variations
-        # Convert to string, strip whitespace, lowercase, and check for equity share(s)
-        security_prior_col = df['TYPE OF SECURITY (PRIOR)'].astype(str).str.strip().str.lower()
-        df = df[(df['TYPE OF SECURITY (PRIOR)'].notna()) & 
-                (security_prior_col.str.contains('equity share', na=False))]
-        final_count = len(df)
-        
-        # Remove specified columns
-        columns_to_remove = [
-            'DERIVATIVE TYPE SECURITY',
-            'DERIVATIVE CONTRACT SPECIFICATION',
-            'NOTIONAL VALUE(BUY)',
-            'NUMBER OF UNITS/CONTRACT LOT SIZE (BUY)',
-            'NOTIONAL VALUE(SELL)',
-            'NUMBER OF UNITS/CONTRACT LOT SIZE  (SELL)',
-            'REMARK',
-            'BROADCASTE DATE AND TIME',
-            'XBRL',
-            'TYPE OF SECURITY (ACQUIRED/DISPLOSED)'
-        ]
-        
-        # Remove columns that exist in the dataframe
-        existing_columns_to_remove = [col for col in columns_to_remove if col in df.columns]
-        if existing_columns_to_remove:
-            df = df.drop(columns=existing_columns_to_remove)
-        
-        # Store filtered dataframe
-        st.session_state.df = df
-        
-        # Display success message with filter info
-        st.success(f"✅ File uploaded successfully! ({final_count} rows, {len(df.columns)} columns)")
-        
-        # Show filter information
-        if original_count != final_count:
-            filter_info = []
-            if original_count != regulation_filtered_count:
-                filter_info.append(f"{original_count - regulation_filtered_count} rows with REGULATION '7(3)'")
-            if regulation_filtered_count != category_filtered_count:
-                filter_info.append(f"{regulation_filtered_count - category_filtered_count} rows with other CATEGORY OF PERSON values")
-            if category_filtered_count != transaction_filtered_count:
-                filter_info.append(f"{category_filtered_count - transaction_filtered_count} rows with other ACQUISITION/DISPOSAL TRANSACTION TYPE values")
-            if transaction_filtered_count != mode_filtered_count:
-                filter_info.append(f"{transaction_filtered_count - mode_filtered_count} rows with other MODE OF ACQUISITION values")
-            if mode_filtered_count != final_count:
-                filter_info.append(f"{mode_filtered_count - final_count} rows with other TYPE OF SECURITY (PRIOR) values")
+            original_count = len(df)
             
-            st.info(f"📊 **Filters Applied:** Removed {', '.join(filter_info)}. Showing {final_count} filtered rows.")
-        
-        # Show basic info
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Rows", final_count)
-        with col2:
-            st.metric("Total Columns", len(df.columns))
-        with col3:
-            st.metric("Memory Usage", f"{df.memory_usage(deep=True).sum() / 1024:.2f} KB")
-        with col4:
-            st.metric("Missing Values", df.isnull().sum().sum())
-        
-        st.markdown("---")
-        
-        # Dropdown for column selection
-        st.subheader("🔽 Additional Column Selection & Filtering")
-        st.caption("ℹ️ Automatic filters already applied: REGULATION ≠ '7(3)', CATEGORY OF PERSON = 'Promoter Group' or 'Promoters', ACQUISITION/DISPOSAL TRANSACTION TYPE = 'Buy' or 'Sell', MODE OF ACQUISITION = 'Market Sale' or 'Market Purchase', and TYPE OF SECURITY (PRIOR) = 'Equity Shares'")
-        
-        col_left, col_right = st.columns([1, 1])
-        
-        with col_left:
-            # Multi-select dropdown for columns
-            selected_columns = st.multiselect(
-                "Select columns to display:",
-                options=df.columns.tolist(),
-                default=df.columns.tolist(),
-                help="Choose which columns you want to see in the data table"
-            )
-        
-        with col_right:
-            # Dropdown for filtering by column (optional)
-            filter_column = st.selectbox(
-                "Filter by column (optional):",
-                options=["None"] + df.columns.tolist(),
-                help="Select a column to filter the data"
-            )
-        
-        # Apply filters
-        filtered_df = df.copy()
-        
-        # Column selection
-        if selected_columns:
-            filtered_df = filtered_df[selected_columns]
-        else:
-            st.warning("⚠️ Please select at least one column to display.")
-            filtered_df = pd.DataFrame()
-        
-        # Column-based filtering
-        if filter_column != "None" and len(filtered_df) > 0:
-            unique_values = df[filter_column].dropna().unique().tolist()
-            if len(unique_values) > 0:
-                selected_filter_value = st.selectbox(
-                    f"Select value from '{filter_column}':",
-                    options=["All"] + sorted([str(v) for v in unique_values]),
-                    help=f"Filter rows where {filter_column} equals the selected value"
-                )
-                
-                if selected_filter_value != "All":
-                    filtered_df = filtered_df[df[filter_column] == selected_filter_value]
-        
-        st.markdown("---")
-        
-        # Display data
-        if len(filtered_df) > 0:
-            st.subheader("📋 Data Preview")
+            # 2. Apply Automatic Filters
+            df = df[df['REGULATION'].astype(str).str.strip() != '7(3)']
+            reg_f = len(df)
+            df = df[df['CATEGORY OF PERSON'].notna() & df['CATEGORY OF PERSON'].astype(str).str.strip().str.lower().isin(['promoter group', 'promoters'])]
+            cat_f = len(df)
+            df = df[df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].notna() & df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.lower().isin(['buy', 'sell'])]
+            tra_f = len(df)
+            df = df[df['MODE OF ACQUISITION'].notna() & df['MODE OF ACQUISITION'].astype(str).str.strip().str.lower().isin(['market sale', 'market purchase'])]
+            mod_f = len(df)
+            df = df[df['TYPE OF SECURITY (PRIOR)'].notna() & df['TYPE OF SECURITY (PRIOR)'].astype(str).str.strip().str.lower().str.contains('equity share', na=False)]
+            final_count = len(df)
             
-            # Show data info
-            st.info(f"Showing {len(filtered_df)} rows and {len(filtered_df.columns)} columns")
+            # Clean columns
+            to_drop = ['DERIVATIVE TYPE SECURITY', 'DERIVATIVE CONTRACT SPECIFICATION', 'NOTIONAL VALUE(BUY)', 'NUMBER OF UNITS/CONTRACT LOT SIZE (BUY)', 'NOTIONAL VALUE(SELL)', 'NUMBER OF UNITS/CONTRACT LOT SIZE  (SELL)', 'REMARK', 'BROADCASTE DATE AND TIME', 'XBRL', 'TYPE OF SECURITY (ACQUIRED/DISPLOSED)']
+            existing_drop = [c for c in to_drop if c in df.columns]
+            if existing_drop: df = df.drop(columns=existing_drop)
             
-            # Format numeric columns with Indian currency standard
-            filtered_df_formatted = filtered_df.copy()
-            numeric_columns = filtered_df.select_dtypes(include=['int64', 'float64']).columns
-            for col in numeric_columns:
-                filtered_df_formatted[col] = filtered_df[col].apply(format_indian_number)
+            # Save stats text
+            infos = []
+            if original_count != reg_f: infos.append(f"{original_count - reg_f} REG '7(3)'")
+            if reg_f != cat_f: infos.append(f"{reg_f - cat_f} non-promoter")
+            if cat_f != tra_f: infos.append(f"{cat_f - tra_f} non-buy/sell")
+            if tra_f != mod_f: infos.append(f"{tra_f - mod_f} non-market")
+            if mod_f != final_count: infos.append(f"{mod_f - final_count} non-equity")
+            st.session_state.filter_info_text = f"📊 **Filters Applied:** Removed {', '.join(infos)}. Total {final_count} rows." if infos else ""
             
-            # Display dataframe
-            st.dataframe(
-                filtered_df_formatted,
-                use_container_width=True,
-                height=400
-            )
+            # 3. Heavy Analytics Logic
+            # Prepare transactions_df
+            t_df = df.copy()
+            numeric_cols = ['NO. OF SECURITIES (ACQUIRED/DISPLOSED)', 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)', '% SHAREHOLDING (PRIOR)', '% POST']
+            for col in numeric_cols: t_df[col] = pd.to_numeric(t_df[col], errors='coerce')
+            t_df['Shareholding Delta'] = t_df['% POST'] - t_df['% SHAREHOLDING (PRIOR)']
             
-            # Download filtered data
-            csv_buffer = io.StringIO()
-            filtered_df.to_csv(csv_buffer, index=False)
-            csv_string = csv_buffer.getvalue()
+            # Grouping
+            t_upper = t_df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.upper()
+            buy_data = t_df[t_upper == 'BUY']
+            sell_data = t_df[t_upper == 'SELL']
             
-            st.download_button(
-                label="📥 Download Filtered Data as CSV",
-                data=csv_string,
-                file_name="filtered_data.csv",
-                mime="text/csv"
-            )
-        else:
-            st.warning("No data to display. Please adjust your filters.")
-        
-        # Transactions Analytics Section
-        st.markdown("---")
-        st.subheader("📈 Transactions Analytics")
-        
-        # Show number of distinct companies
-        if len(df) > 0 and 'COMPANY' in df.columns:
-            distinct_companies = df['COMPANY'].nunique()
-            st.caption(f"📊 **{distinct_companies}** distinct companies")
-        
-        if len(df) > 0:
-            try:
-                # Prepare data for transactions analysis
-                transactions_df = df.copy()
-                
-                # Check if required columns exist before processing
-                if 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)' not in transactions_df.columns:
-                    st.error("❌ Column 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)' not found in the data.")
-                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
-                elif 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)' not in transactions_df.columns:
-                    st.error("❌ Column 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)' not found in the data.")
-                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
-                elif 'COMPANY' not in transactions_df.columns:
-                    st.error("❌ Column 'COMPANY' not found in the data.")
-                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
-                elif 'ACQUISITION/DISPOSAL TRANSACTION TYPE' not in transactions_df.columns:
-                    st.error("❌ Column 'ACQUISITION/DISPOSAL TRANSACTION TYPE' not found in the data.")
-                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
-                elif '% SHAREHOLDING (PRIOR)' not in transactions_df.columns:
-                    st.error("❌ Column '% SHAREHOLDING (PRIOR)' not found in the data.")
-                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
-                elif '% POST' not in transactions_df.columns:
-                    st.error("❌ Column '% POST' not found in the data.")
-                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
-                elif 'SYMBOL' not in transactions_df.columns:
-                    st.error("❌ Column 'SYMBOL' not found in the data.")
-                    st.info(f"Available columns: {', '.join(sorted(transactions_df.columns.tolist()))}")
-                else:
-                    # Convert numeric columns, handling any non-numeric values
-                    transactions_df['NO. OF SECURITIES (ACQUIRED/DISPLOSED)'] = pd.to_numeric(
-                        transactions_df['NO. OF SECURITIES (ACQUIRED/DISPLOSED)'], 
-                        errors='coerce'
-                    )
-                    transactions_df['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] = pd.to_numeric(
-                        transactions_df['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'], 
-                        errors='coerce'
-                    )
-                    transactions_df['% SHAREHOLDING (PRIOR)'] = pd.to_numeric(
-                        transactions_df['% SHAREHOLDING (PRIOR)'], 
-                        errors='coerce'
-                    )
-                    transactions_df['% POST'] = pd.to_numeric(
-                        transactions_df['% POST'], 
-                        errors='coerce'
-                    )
-                    
-                    # Calculate delta (Post - Prior) for each transaction
-                    transactions_df['Shareholding Delta'] = transactions_df['% POST'] - transactions_df['% SHAREHOLDING (PRIOR)']
-                    
-                    # Group by company and transaction type
-                    transaction_type_upper = transactions_df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.upper()
-                    buy_data = transactions_df[transaction_type_upper == 'BUY']
-                    sell_data = transactions_df[transaction_type_upper == 'SELL']
-                    
-                    # Calculate totals by company for Buy transactions
-                    if len(buy_data) > 0:
-                        buy_summary = buy_data.groupby('COMPANY').agg({
-                            'SYMBOL': 'first',
-                            'NO. OF SECURITIES (ACQUIRED/DISPLOSED)': 'sum',
-                            'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum',
-                            'Shareholding Delta': 'sum'
-                        }).reset_index()
-                        buy_summary.columns = ['COMPANY', 'SYMBOL', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy']
-                    else:
-                        buy_summary = pd.DataFrame(columns=['COMPANY', 'SYMBOL', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy'])
-                    
-                    # Calculate totals by company for Sell transactions
-                    if len(sell_data) > 0:
-                        sell_summary = sell_data.groupby('COMPANY').agg({
-                            'SYMBOL': 'first',
-                            'NO. OF SECURITIES (ACQUIRED/DISPLOSED)': 'sum',
-                            'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum',
-                            'Shareholding Delta': 'sum'
-                        }).reset_index()
-                        sell_summary.columns = ['COMPANY', 'SYMBOL', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell']
-                    else:
-                        sell_summary = pd.DataFrame(columns=['COMPANY', 'SYMBOL', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell'])
-                    
-                    # Merge buy and sell summaries
-                    if len(buy_summary) > 0 and len(sell_summary) > 0:
-                        transactions_summary = pd.merge(
-                            buy_summary[['COMPANY', 'SYMBOL', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy']],
-                            sell_summary[['COMPANY', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell']],
-                            on='COMPANY',
-                            how='outer'
-                        )
-                        # Fill numeric columns with 0, but preserve SYMBOL from buy_summary or sell_summary
-                        numeric_cols = ['Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell']
-                        transactions_summary[numeric_cols] = transactions_summary[numeric_cols].fillna(0)
-                        # Fill SYMBOL by merging back with original data if needed
-                        if transactions_summary['SYMBOL'].isna().any():
-                            symbol_map = transactions_df.groupby('COMPANY')['SYMBOL'].first().to_dict()
-                            transactions_summary['SYMBOL'] = transactions_summary['COMPANY'].map(symbol_map).fillna(transactions_summary['SYMBOL'])
-                    elif len(buy_summary) > 0:
-                        transactions_summary = buy_summary.copy()
-                        transactions_summary['Total Share Sells'] = 0
-                        transactions_summary['Total Value of Share Sell'] = 0
-                        transactions_summary['Delta Shareholding Sell'] = 0
-                    elif len(sell_summary) > 0:
-                        transactions_summary = sell_summary.copy()
-                        transactions_summary['Total Share Buys'] = 0
-                        transactions_summary['Total Value of Share Buy'] = 0
-                        transactions_summary['Delta Shareholding Buy'] = 0
-                    else:
-                        transactions_summary = pd.DataFrame(columns=['COMPANY', 'SYMBOL', 'Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell'])
-                    
-                    if len(transactions_summary) > 0:
-                        # Sort by company name
-                        transactions_summary = transactions_summary.sort_values('COMPANY').reset_index(drop=True)
-                        
-                        # Format the numbers for better display
-                        transactions_summary['Total Share Buys'] = transactions_summary['Total Share Buys'].fillna(0).astype(int)
-                        transactions_summary['Total Share Sells'] = transactions_summary['Total Share Sells'].fillna(0).astype(int)
-                        transactions_summary['Total Value of Share Buy'] = transactions_summary['Total Value of Share Buy'].fillna(0).round(2)
-                        transactions_summary['Total Value of Share Sell'] = transactions_summary['Total Value of Share Sell'].fillna(0).round(2)
-                        transactions_summary['Delta Shareholding Buy'] = transactions_summary['Delta Shareholding Buy'].fillna(0).round(4)
-                        transactions_summary['Delta Shareholding Sell'] = transactions_summary['Delta Shareholding Sell'].fillna(0).round(4)
-                        
-                        # Filter out companies where Total Value of Share Buy is less than 9,000,000
-                        transactions_summary = transactions_summary[transactions_summary['Total Value of Share Buy'] >= 9000000]
-                        
-                        # Now calculate Max Transactions and merge with transactions_summary
-                        try:
-                            # Prepare data for max transactions analysis
-                            max_transactions_df = transactions_df.copy()
-                            
-                            # Separate buy and sell transactions
-                            transaction_type_upper_max = max_transactions_df['ACQUISITION/DISPOSAL TRANSACTION TYPE'].astype(str).str.strip().str.upper()
-                            buy_data_max = max_transactions_df[transaction_type_upper_max == 'BUY'].copy()
-                            sell_data_max = max_transactions_df[transaction_type_upper_max == 'SELL'].copy()
-                            
-                            max_transactions_list = []
-                            
-                            # Get unique companies
-                            unique_companies = max_transactions_df['COMPANY'].unique()
-                            
-                            for company in unique_companies:
-                                company_buy = buy_data_max[buy_data_max['COMPANY'] == company]
-                                company_sell = sell_data_max[sell_data_max['COMPANY'] == company]
-                                
-                                max_transaction = {'COMPANY': company}
-                                
-                                # Max Buy Value, Number of Max Buy Shares, and Date (single date for both)
-                                if len(company_buy) > 0:
-                                    buy_value_col = company_buy['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
-                                    buy_shares_col = company_buy['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                                    
-                                    # Find max value
-                                    if buy_value_col.notna().any():
-                                        max_buy_idx = buy_value_col.idxmax()
-                                        if pd.notna(max_buy_idx):
-                                            max_transaction['Max Buy Value'] = company_buy.loc[max_buy_idx, 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
-                                        else:
-                                            max_transaction['Max Buy Value'] = None
-                                    else:
-                                        max_transaction['Max Buy Value'] = None
-                                    
-                                    # Find max shares (if tied, choose one with highest value)
-                                    if buy_shares_col.notna().any():
-                                        max_shares_value = buy_shares_col.max()
-                                        # Find all rows with max shares
-                                        max_shares_rows = company_buy[buy_shares_col == max_shares_value]
-                                        if len(max_shares_rows) > 0:
-                                            # Among rows with max shares, find the one with max value
-                                            max_value_in_max_shares = max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'].max()
-                                            if pd.notna(max_value_in_max_shares):
-                                                max_shares_max_value_rows = max_shares_rows[
-                                                    max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] == max_value_in_max_shares
-                                                ]
-                                                # Check if we have any rows after filtering
-                                                if len(max_shares_max_value_rows) > 0:
-                                                    # Get the first row - use this date for both value and shares
-                                                    max_buy_shares_idx = max_shares_max_value_rows.index[0]
-                                                    max_transaction['Number of Max Buy Shares'] = company_buy.loc[max_buy_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                                                    max_transaction['Max Buy Date'] = company_buy.loc[max_buy_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
-                                                else:
-                                                    max_transaction['Number of Max Buy Shares'] = None
-                                                    max_transaction['Max Buy Date'] = None
-                                            else:
-                                                max_transaction['Number of Max Buy Shares'] = None
-                                                max_transaction['Max Buy Date'] = None
-                                        else:
-                                            max_transaction['Number of Max Buy Shares'] = None
-                                            max_transaction['Max Buy Date'] = None
-                                    else:
-                                        max_transaction['Number of Max Buy Shares'] = None
-                                        max_transaction['Max Buy Date'] = None
-                                else:
-                                    max_transaction['Max Buy Value'] = None
-                                    max_transaction['Number of Max Buy Shares'] = None
-                                    max_transaction['Max Buy Date'] = None
-                                
-                                # Max Sell Value, Number of Max Sell Shares, and Date (single date for both)
-                                if len(company_sell) > 0:
-                                    sell_value_col = company_sell['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
-                                    sell_shares_col = company_sell['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                                    
-                                    # Find max value
-                                    if sell_value_col.notna().any():
-                                        max_sell_idx = sell_value_col.idxmax()
-                                        if pd.notna(max_sell_idx):
-                                            max_transaction['Max Sell Value'] = company_sell.loc[max_sell_idx, 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
-                                        else:
-                                            max_transaction['Max Sell Value'] = None
-                                    else:
-                                        max_transaction['Max Sell Value'] = None
-                                    
-                                    # Find max shares (if tied, choose one with highest value)
-                                    if sell_shares_col.notna().any():
-                                        max_shares_value = sell_shares_col.max()
-                                        # Find all rows with max shares
-                                        max_shares_rows = company_sell[sell_shares_col == max_shares_value]
-                                        if len(max_shares_rows) > 0:
-                                            # Among rows with max shares, find the one with max value
-                                            max_value_in_max_shares = max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'].max()
-                                            if pd.notna(max_value_in_max_shares):
-                                                max_shares_max_value_rows = max_shares_rows[
-                                                    max_shares_rows['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] == max_value_in_max_shares
-                                                ]
-                                                # Check if we have any rows after filtering
-                                                if len(max_shares_max_value_rows) > 0:
-                                                    # Get the first row - use this date for both value and shares
-                                                    max_sell_shares_idx = max_shares_max_value_rows.index[0]
-                                                    max_transaction['Number of Max Sell Shares'] = company_sell.loc[max_sell_shares_idx, 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
-                                                    max_transaction['Max Sell Date'] = company_sell.loc[max_sell_shares_idx, 'DATE OF ALLOTMENT/ACQUISITION FROM']
-                                                else:
-                                                    max_transaction['Number of Max Sell Shares'] = None
-                                                    max_transaction['Max Sell Date'] = None
-                                            else:
-                                                max_transaction['Number of Max Sell Shares'] = None
-                                                max_transaction['Max Sell Date'] = None
-                                        else:
-                                            max_transaction['Number of Max Sell Shares'] = None
-                                            max_transaction['Max Sell Date'] = None
-                                    else:
-                                        max_transaction['Number of Max Sell Shares'] = None
-                                        max_transaction['Max Sell Date'] = None
-                                else:
-                                    max_transaction['Max Sell Value'] = None
-                                    max_transaction['Number of Max Sell Shares'] = None
-                                    max_transaction['Max Sell Date'] = None
-                                
-                                max_transactions_list.append(max_transaction)
-                            
-                            # Create max transactions dataframe
-                            max_transactions_summary = pd.DataFrame(max_transactions_list)
-                            max_transactions_summary = max_transactions_summary.sort_values('COMPANY').reset_index(drop=True)
-                            
-                            # Format the numbers for max transactions
-                            if 'Max Buy Value' in max_transactions_summary.columns:
-                                max_transactions_summary['Max Buy Value'] = max_transactions_summary['Max Buy Value'].fillna(0).round(2)
-                            if 'Number of Max Buy Shares' in max_transactions_summary.columns:
-                                max_transactions_summary['Number of Max Buy Shares'] = max_transactions_summary['Number of Max Buy Shares'].fillna(0).astype(int)
-                            if 'Max Sell Value' in max_transactions_summary.columns:
-                                max_transactions_summary['Max Sell Value'] = max_transactions_summary['Max Sell Value'].fillna(0).round(2)
-                            if 'Number of Max Sell Shares' in max_transactions_summary.columns:
-                                max_transactions_summary['Number of Max Sell Shares'] = max_transactions_summary['Number of Max Sell Shares'].fillna(0).astype(int)
-                            if 'Max Buy Date' in max_transactions_summary.columns:
-                                max_transactions_summary['Max Buy Date'] = max_transactions_summary['Max Buy Date'].fillna('N/A')
-                            if 'Max Sell Date' in max_transactions_summary.columns:
-                                max_transactions_summary['Max Sell Date'] = max_transactions_summary['Max Sell Date'].fillna('N/A')
-                            
-                            # Merge transactions_summary with max_transactions_summary
-                            combined_summary = pd.merge(
-                                transactions_summary,
-                                max_transactions_summary,
-                                on='COMPANY',
-                                how='outer'
-                            )
+            def get_sum(data, suffix):
+                if len(data) == 0: return pd.DataFrame(columns=['COMPANY', 'SYMBOL', f'Total Share {suffix}s', f'Total Value of Share {suffix}', f'Delta Shareholding {suffix}'])
+                res = data.groupby('COMPANY').agg({'SYMBOL': 'first', 'NO. OF SECURITIES (ACQUIRED/DISPLOSED)': 'sum', 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)': 'sum', 'Shareholding Delta': 'sum'}).reset_index()
+                res.columns = ['COMPANY', 'SYMBOL', f'Total Share {suffix}s', f'Total Value of Share {suffix}', f'Delta Shareholding {suffix}']
+                return res
 
-                            # Merge with external fundamentals file
-                            try:
-                                fundamentals_df = None
-                                source_name = ""
-                                
-                                # Check if user uploaded a fundamentals file
-                                if fundamentals_file is not None:
-                                    fundamentals_df = pd.read_csv(fundamentals_file)
-                                    source_name = getattr(fundamentals_file, "name", "uploaded file")
-                                else:
-                                    # Fallback to default files if they exist
-                                    default_path1 = "All Name.11-02-2026.Technical.csv"
-                                    default_path2 = "All Name.17-01-2026.Default.csv"
-                                    
-                                    if os.path.exists(default_path1):
-                                        fundamentals_df = pd.read_csv(default_path1)
-                                        source_name = os.path.basename(default_path1)
-                                    elif os.path.exists(default_path2):
-                                        fundamentals_df = pd.read_csv(default_path2)
-                                        source_name = os.path.basename(default_path2)
-                                
-                                if fundamentals_df is not None:
-                                    # Extract symbol from companyId (e.g., "NSE:20MICRONS" -> "20MICRONS")
-                                    # The user specified "company ID is NSE:Company Name", implying the suffix is the identifier to match
-                                    fundamentals_df['Temp_Symbol_Match'] = fundamentals_df['companyId'].astype(str).str.split(':').str[-1]
-                                    
-                                    # Convert to string and strip just in case
-                                    fundamentals_df['Temp_Symbol_Match'] = fundamentals_df['Temp_Symbol_Match'].str.strip()
-                                    if 'SYMBOL' in combined_summary.columns:
-                                        combined_summary['SYMBOL_Match'] = combined_summary['SYMBOL'].astype(str).str.strip()
-                                        
-                                        # Merge
-                                        combined_summary = pd.merge(
-                                            combined_summary,
-                                            fundamentals_df,
-                                            left_on='SYMBOL_Match',
-                                            right_on='Temp_Symbol_Match',
-                                            how='left'
-                                        )
-                                        
-                                        # Drop helper columns
-                                        drop_cols = ['Temp_Symbol_Match', 'SYMBOL_Match']
-                                        combined_summary = combined_summary.drop(columns=[c for c in drop_cols if c in combined_summary.columns])
-                                        
-                                        st.success(f"✅ Successfully merged data from {source_name}")
-                                    else:
-                                        st.warning("⚠️ SYMBOL column missing in transactions data, cannot merge fundamentals.")
-                                else:
-                                    st.info("ℹ️ No fundamentals file uploaded and no default file found. Skipping merge.")
-                            except Exception as e:
-                                st.warning(f"⚠️ Error merging fundamentals file: {e}")
-                            
-                            # Filter out companies where Total Value of Share Buy is less than 9,000,000
-                            if 'Total Value of Share Buy' in combined_summary.columns:
-                                combined_summary = combined_summary[combined_summary['Total Value of Share Buy'] >= 9000000]
-                            
-                            # Sort by company name
-                            combined_summary = combined_summary.sort_values('COMPANY').reset_index(drop=True)
-                            
-                            # Calculate average buy and sell from max transaction values (average price per share of max transaction)
-                            if 'Max Buy Value' in combined_summary.columns and 'Number of Max Buy Shares' in combined_summary.columns:
-                                combined_summary['Max Avg Buy'] = combined_summary.apply(
-                                    lambda row: (row['Max Buy Value'] / row['Number of Max Buy Shares']) 
-                                    if pd.notna(row['Number of Max Buy Shares']) and row['Number of Max Buy Shares'] > 0 else 0, axis=1
-                                ).round(2)
-                            else:
-                                combined_summary['Max Avg Buy'] = 0
-                            
-                            if 'Max Sell Value' in combined_summary.columns and 'Number of Max Sell Shares' in combined_summary.columns:
-                                combined_summary['Max Avg Sell'] = combined_summary.apply(
-                                    lambda row: (row['Max Sell Value'] / row['Number of Max Sell Shares']) 
-                                    if pd.notna(row['Number of Max Sell Shares']) and row['Number of Max Sell Shares'] > 0 else 0, axis=1
-                                ).round(2)
-                            else:
-                                combined_summary['Max Avg Sell'] = 0
-                            
-                            # Reorder columns: COMPANY first, then SYMBOL, then all Buy columns, then all Sell columns
-                            buy_columns = [col for col in combined_summary.columns if 'Buy' in col or col == 'Max Avg Buy']
-                            sell_columns = [col for col in combined_summary.columns if 'Sell' in col or col == 'Max Avg Sell']
-                            other_columns = [col for col in combined_summary.columns if col not in ['COMPANY', 'SYMBOL'] + buy_columns + sell_columns]
-                            
-                            # Create the desired column order: Max columns, then Avg, then Delta, then Totals
-                            # Buy columns order: Max Buy Date, Max Buy Value, Number of Max Buy Shares, Max Avg Buy, Delta Shareholding Buy, Total Share Buys, Total Value of Share Buy
-                            buy_column_order = [
-                                'Max Buy Date',
-                                'Max Buy Value',
-                                'Number of Max Buy Shares',
-                                'Max Avg Buy',
-                                'Delta Shareholding Buy',
-                                'Total Share Buys',
-                                'Total Value of Share Buy'
-                            ]
-                            # Keep only columns that exist
-                            buy_cols_sorted = [col for col in buy_column_order if col in buy_columns]
-                            # Add any remaining buy columns that weren't in the predefined order
-                            remaining_buy_cols = [col for col in buy_columns if col not in buy_cols_sorted]
-                            buy_cols_sorted = buy_cols_sorted + sorted(remaining_buy_cols)
-                            
-                            # Sell columns order: Max Sell Date, Max Sell Value, Number of Max Sell Shares, Max Avg Sell, Delta Shareholding Sell, Total Share Sells, Total Value of Share Sell
-                            sell_column_order = [
-                                'Max Sell Date',
-                                'Max Sell Value',
-                                'Number of Max Sell Shares',
-                                'Max Avg Sell',
-                                'Delta Shareholding Sell',
-                                'Total Share Sells',
-                                'Total Value of Share Sell'
-                            ]
-                            # Keep only columns that exist
-                            sell_cols_sorted = [col for col in sell_column_order if col in sell_columns]
-                            # Add any remaining sell columns that weren't in the predefined order
-                            remaining_sell_cols = [col for col in sell_columns if col not in sell_cols_sorted]
-                            sell_cols_sorted = sell_cols_sorted + sorted(remaining_sell_cols)
-                            
-                            column_order = ['COMPANY', 'SYMBOL'] + buy_cols_sorted + sell_cols_sorted + sorted(other_columns)
-                            
-                            # Reorder only columns that exist
-                            column_order = [col for col in column_order if col in combined_summary.columns]
-                            combined_summary = combined_summary[column_order]
-                            
-                            # Find column indices for max and avg columns to add styling
-                            # Group: Max Buy Date, Max Buy Value, Number of Max Buy Shares, Max Avg Buy
-                            max_buy_cols = ['Max Buy Date', 'Max Buy Value', 'Number of Max Buy Shares', 'Max Avg Buy']
-                            # Group: Max Sell Date, Max Sell Value, Number of Max Sell Shares, Max Avg Sell
-                            max_sell_cols = ['Max Sell Date', 'Max Sell Value', 'Number of Max Sell Shares', 'Max Avg Sell']
-                            
-                            # Get column indices (accounting for COMPANY and SYMBOL being first 2 columns)
-                            buy_max_indices = []
-                            sell_max_indices = []
-                            for i, col in enumerate(column_order):
-                                if col in max_buy_cols:
-                                    buy_max_indices.append(i + 1)  # +1 because nth-child is 1-indexed
-                                if col in max_sell_cols:
-                                    sell_max_indices.append(i + 1)
-                            
-                            # Add CSS styling for grouped columns
-                            if buy_max_indices or sell_max_indices:
-                                # Create CSS for each column individually
-                                buy_css = ""
-                                sell_css = ""
-                                
-                                if buy_max_indices:
-                                    buy_first = min(buy_max_indices)
-                                    buy_last = max(buy_max_indices)
-                                    # Generate CSS for all columns in the range
-                                    buy_selectors = ', '.join([f'div[data-testid="stDataFrame"] table thead tr th:nth-child({idx})' for idx in range(buy_first, buy_last + 1)])
-                                    buy_td_selectors = ', '.join([f'div[data-testid="stDataFrame"] table tbody tr td:nth-child({idx})' for idx in range(buy_first, buy_last + 1)])
-                                    
-                                    buy_css = f"""
-                                    /* Buy max/avg columns grouping */
-                                    {buy_selectors} {{
-                                        border-top: 3px solid #4CAF50 !important;
-                                        border-bottom: 3px solid #4CAF50 !important;
-                                        background-color: rgba(76, 175, 80, 0.15) !important;
-                                        font-weight: 600 !important;
-                                    }}
-                                    {buy_td_selectors} {{
-                                        border-left: 3px solid #4CAF50 !important;
-                                        border-right: 3px solid #4CAF50 !important;
-                                        background-color: rgba(76, 175, 80, 0.08) !important;
-                                    }}
-                                    div[data-testid="stDataFrame"] table thead tr th:nth-child({buy_first}) {{
-                                        border-left: 3px solid #4CAF50 !important;
-                                        border-top-left-radius: 5px !important;
-                                        border-bottom-left-radius: 5px !important;
-                                    }}
-                                    div[data-testid="stDataFrame"] table thead tr th:nth-child({buy_last}) {{
-                                        border-right: 3px solid #4CAF50 !important;
-                                        border-top-right-radius: 5px !important;
-                                        border-bottom-right-radius: 5px !important;
-                                    }}
-                                    div[data-testid="stDataFrame"] table tbody tr td:nth-child({buy_first}) {{
-                                        border-left: 3px solid #4CAF50 !important;
-                                    }}
-                                    div[data-testid="stDataFrame"] table tbody tr td:nth-child({buy_last}) {{
-                                        border-right: 3px solid #4CAF50 !important;
-                                    }}
-                                    """
-                                
-                                if sell_max_indices:
-                                    sell_first = min(sell_max_indices)
-                                    sell_last = max(sell_max_indices)
-                                    # Generate CSS for all columns in the range
-                                    sell_selectors = ', '.join([f'div[data-testid="stDataFrame"] table thead tr th:nth-child({idx})' for idx in range(sell_first, sell_last + 1)])
-                                    sell_td_selectors = ', '.join([f'div[data-testid="stDataFrame"] table tbody tr td:nth-child({idx})' for idx in range(sell_first, sell_last + 1)])
-                                    
-                                    sell_css = f"""
-                                    /* Sell max/avg columns grouping */
-                                    {sell_selectors} {{
-                                        border-top: 3px solid #FF9800 !important;
-                                        border-bottom: 3px solid #FF9800 !important;
-                                        background-color: rgba(255, 152, 0, 0.15) !important;
-                                        font-weight: 600 !important;
-                                    }}
-                                    {sell_td_selectors} {{
-                                        border-left: 3px solid #FF9800 !important;
-                                        border-right: 3px solid #FF9800 !important;
-                                        background-color: rgba(255, 152, 0, 0.08) !important;
-                                    }}
-                                    div[data-testid="stDataFrame"] table thead tr th:nth-child({sell_first}) {{
-                                        border-left: 3px solid #FF9800 !important;
-                                        border-top-left-radius: 5px !important;
-                                        border-bottom-left-radius: 5px !important;
-                                    }}
-                                    div[data-testid="stDataFrame"] table thead tr th:nth-child({sell_last}) {{
-                                        border-right: 3px solid #FF9800 !important;
-                                        border-top-right-radius: 5px !important;
-                                        border-bottom-right-radius: 5px !important;
-                                    }}
-                                    div[data-testid="stDataFrame"] table tbody tr td:nth-child({sell_first}) {{
-                                        border-left: 3px solid #FF9800 !important;
-                                    }}
-                                    div[data-testid="stDataFrame"] table tbody tr td:nth-child({sell_last}) {{
-                                        border-right: 3px solid #FF9800 !important;
-                                    }}
-                                    """
-                                
-                                st.markdown(
-                                    f"""
-                                    <style>
-                                    {buy_css}
-                                    {sell_css}
-                                    </style>
-                                    """,
-                                    unsafe_allow_html=True
-                                )
-                            
-                            # Format numeric columns with Indian currency standard
-                            combined_summary_formatted = combined_summary.copy()
-                            numeric_columns = combined_summary.select_dtypes(include=['int64', 'float64']).columns
-                            for col in numeric_columns:
-                                combined_summary_formatted[col] = combined_summary[col].apply(format_indian_number)
-                            
-                            # Display the combined summary
-                            st.dataframe(
-                                combined_summary_formatted,
-                                use_container_width=True,
-                                hide_index=True
-                            )
-                            
-                            # Download button for combined summary
-                            combined_csv_buffer = io.StringIO()
-                            combined_summary.to_csv(combined_csv_buffer, index=False)
-                            combined_csv_string = combined_csv_buffer.getvalue()
-                            
-                            st.download_button(
-                                label="📥 Download Combined Transactions & Max Transactions Summary as CSV",
-                                data=combined_csv_string,
-                                file_name="combined_transactions_summary.csv",
-                                mime="text/csv"
-                            )
-                        except Exception as e:
-                            # If max transactions calculation fails, just show transactions summary
-                            st.warning(f"⚠️ Could not calculate max transactions: {str(e)}. Showing transactions summary only.")
-                            
-                            # Format numeric columns with Indian currency standard
-                            transactions_summary_formatted = transactions_summary.copy()
-                            numeric_columns = transactions_summary.select_dtypes(include=['int64', 'float64']).columns
-                            for col in numeric_columns:
-                                transactions_summary_formatted[col] = transactions_summary[col].apply(format_indian_number)
-                            
-                            # Display the transactions summary
-                            st.dataframe(
-                                transactions_summary_formatted,
-                                use_container_width=True,
-                                hide_index=True
-                            )
-                            
-                            # Download button for transactions summary
-                            transactions_csv_buffer = io.StringIO()
-                            transactions_summary.to_csv(transactions_csv_buffer, index=False)
-                            transactions_csv_string = transactions_csv_buffer.getvalue()
-                            
-                            st.download_button(
-                                label="📥 Download Transactions Summary as CSV",
-                                data=transactions_csv_string,
-                                file_name="transactions_summary.csv",
-                                mime="text/csv"
-                            )
-                    else:
-                        st.info("No transaction data available to display.")
-                
-            except KeyError as e:
-                missing_col = str(e).strip("'")
-                st.error(f"❌ Missing required column for transactions analysis: {missing_col}")
-                st.info(f"Available columns: {', '.join(sorted(df.columns.tolist()))}")
-            except Exception as e:
-                st.error(f"❌ Error generating transactions analytics: {str(e)}")
-                st.info("Please ensure the data contains valid numeric values for shares and amounts.")
-        else:
-            st.info("No data available for transactions analysis.")
-        
-        
-        # Additional information section
-        with st.expander("📊 Data Statistics"):
-            st.subheader("Column Information")
-            st.dataframe(df.describe(), use_container_width=True)
+            b_sum = get_sum(buy_data, 'Buy')
+            s_sum = get_sum(sell_data, 'Sell')
             
-            st.subheader("Data Types")
-            dtype_df = pd.DataFrame({
-                'Column': df.columns,
-                'Data Type': [str(dtype) for dtype in df.dtypes],
-                'Non-Null Count': df.count().values,
-                'Null Count': df.isnull().sum().values
-            })
-            st.dataframe(dtype_df, use_container_width=True)
-        
+            # Merge
+            comb = pd.merge(b_sum, s_sum.drop(columns=['SYMBOL']), on='COMPANY', how='outer')
+            num_cols_all = ['Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell']
+            comb[num_cols_all] = comb[num_cols_all].fillna(0)
+            if comb['SYMBOL'].isna().any():
+                symbol_map = t_df.groupby('COMPANY')['SYMBOL'].first().to_dict()
+                comb['SYMBOL'] = comb['COMPANY'].map(symbol_map).fillna(comb['SYMBOL'])
+            
+            comb = comb[comb['Total Value of Share Buy'] >= 9000000].sort_values('COMPANY').reset_index(drop=True)
+            
+            # Max Transactions logic
+            max_list = []
+            for company in t_df['COMPANY'].unique():
+                c_buy = buy_data[buy_data['COMPANY'] == company]
+                c_sell = sell_data[sell_data['COMPANY'] == company]
+                m = {'COMPANY': company}
+                
+                def get_max_info(c_data, pref):
+                    if len(c_data) > 0:
+                        v_col, s_col = c_data['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'], c_data['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                        idx = v_col.idxmax() if v_col.notna().any() else None
+                        m[f'Max {pref} Value'] = c_data.loc[idx, 'VALUE OF SECURITY (ACQUIRED/DISPLOSED)'] if idx else 0
+                        
+                        max_s = s_col.max()
+                        rows_s = c_data[s_col == max_s]
+                        if len(rows_s) > 0:
+                            best_row = rows_s.loc[rows_s['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'].idxmax()]
+                            m[f'Number of Max {pref} Shares'] = best_row['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
+                            m[f'Max {pref} Date'] = best_row['DATE OF ALLOTMENT/ACQUISITION FROM']
+                    else:
+                        m[f'Max {pref} Value'] = 0; m[f'Number of Max {pref} Shares'] = 0; m[f'Max {pref} Date'] = 'N/A'
+
+                get_max_info(c_buy, 'Buy'); get_max_info(c_sell, 'Sell')
+                max_list.append(m)
+            
+            comb = pd.merge(comb, pd.DataFrame(max_list), on='COMPANY', how='left')
+            
+            # Fundamentals Merge
+            f_df = None; s_name = ""
+            if fundamentals_file: f_df = pd.read_csv(fundamentals_file); s_name = fundamentals_file.name
+            else:
+                for p in ["All Name.11-02-2026.Technical.csv", "All Name.17-01-2026.Default.csv"]:
+                    if os.path.exists(p): f_df = pd.read_csv(p); s_name = p; break
+            
+            if f_df is not None:
+                f_df['Match_Sym'] = f_df['companyId'].astype(str).str.split(':').str[-1].str.strip()
+                comb['Match_Sym'] = comb['SYMBOL'].astype(str).str.strip()
+                comb = pd.merge(comb, f_df, left_on='Match_Sym', right_on='Match_Sym', how='left').drop(columns=['Match_Sym'])
+            
+            # Avgs
+            comb['Max Avg Buy'] = (comb['Max Buy Value'] / comb['Number of Max Buy Shares']).fillna(0).round(2)
+            comb['Max Avg Sell'] = (comb['Max Sell Value'] / comb['Number of Max Sell Shares']).fillna(0).round(2)
+            
+            # Column Order
+            b_cols = ['Max Buy Date', 'Max Buy Value', 'Number of Max Buy Shares', 'Max Avg Buy', 'Delta Shareholding Buy', 'Total Share Buys', 'Total Value of Share Buy']
+            s_cols = ['Max Sell Date', 'Max Sell Value', 'Number of Max Sell Shares', 'Max Avg Sell', 'Delta Shareholding Sell', 'Total Share Sells', 'Total Value of Share Sell']
+            other = [c for c in comb.columns if c not in (['COMPANY', 'SYMBOL'] + b_cols + s_cols)]
+            order = ['COMPANY', 'SYMBOL'] + [c for c in b_cols if c in comb.columns] + [c for c in s_cols if c in comb.columns] + sorted(other)
+            comb = comb[order]
+            
+            # CSS indices
+            st.session_state.buy_max_indices = [i+1 for i, c in enumerate(order) if c in ['Max Buy Date', 'Max Buy Value', 'Number of Max Buy Shares', 'Max Avg Buy']]
+            st.session_state.sell_max_indices = [i+1 for i, c in enumerate(order) if c in ['Max Sell Date', 'Max Sell Value', 'Number of Max Sell Shares', 'Max Avg Sell']]
+            
+            # Commit to state
+            st.session_state.df_main = df
+            st.session_state.combined_summary = comb
+            st.session_state.last_processed_files = current_files
+
     except Exception as e:
-        st.error(f"❌ Error reading CSV file: {str(e)}")
-        st.info("Please make sure you uploaded a valid CSV file.")
+        st.error(f"❌ Error: {str(e)}")
+
+# --- DISPLAY SECTION ---
+if st.session_state.df_main is not None:
+    df = st.session_state.df_main
+    comb = st.session_state.combined_summary
+    
+    st.success(f"✅ Data loaded successfully!")
+    if st.session_state.filter_info_text: st.info(st.session_state.filter_info_text)
+    
+    # Overview metrics
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Rows", len(df)); c2.metric("Cols", len(df.columns)); c3.metric("Memory", f"{df.memory_usage().sum()/1024:.1f}KB"); c4.metric("Companies", comb['COMPANY'].nunique() if comb is not None else 0)
+    
+    # Filters
+    st.markdown("---")
+    st.subheader("🔽 Data Filters")
+    fl, fr = st.columns(2)
+    with fl: sel_cols = st.multiselect("Display columns:", df.columns.tolist(), default=df.columns.tolist()[:10])
+    with fr: fil_col = st.selectbox("Filter column:", ["None"] + df.columns.tolist())
+    
+    f_df = df[sel_cols] if sel_cols else df
+    if fil_col != "None":
+        u_vals = df[fil_col].dropna().unique().tolist()
+        if u_vals:
+            sv = st.selectbox(f"Value for {fil_col}:", ["All"] + sorted([str(v) for v in u_vals]))
+            if sv != "All": f_df = f_df[df[fil_col] == sv]
+    
+    # Data Table
+    st.subheader("📋 Transactions Preview")
+    fmt_f = f_df.copy()
+    for c in fmt_f.select_dtypes(include=['number']).columns: fmt_f[c] = fmt_f[c].apply(format_indian_number)
+    st.dataframe(fmt_f, use_container_width=True, height=350)
+    
+    # Analytics Table
+    if comb is not None:
+        st.markdown("---")
+        st.subheader("📈 Summary Analytics")
+        # CSS
+        b_idx, s_idx = st.session_state.buy_max_indices, st.session_state.sell_max_indices
+        css_b = f"div[data-testid='stDataFrame'] table thead tr th:nth-child({b_idx[0]}), div[data-testid='stDataFrame'] table tbody tr td:nth-child({b_idx[0]}) {{ border-left: 3px solid #4CAF50 !important; }}" if b_idx else ""
+        css_s = f"div[data-testid='stDataFrame'] table thead tr th:nth-child({s_idx[0]}), div[data-testid='stDataFrame'] table tbody tr td:nth-child({s_idx[0]}) {{ border-left: 3px solid #FF9800 !important; }}" if s_idx else ""
+        st.markdown(f"<style>{css_b} {css_s}</style>", unsafe_allow_html=True)
+        
+        fmt_c = comb.copy()
+        for c in fmt_c.select_dtypes(include=['number']).columns: fmt_c[c] = fmt_c[c].apply(format_indian_number)
+        st.dataframe(fmt_c, use_container_width=True, hide_index=True)
+        
+        # Download
+        csv_b = io.StringIO(); comb.to_csv(csv_b, index=False)
+        st.download_button("📥 Download Summary Table", csv_b.getvalue(), "summary.csv", "text/csv")
+        
+    with st.expander("📊 Data Stats"):
+        st.dataframe(df.describe())
 
 else:
-    # Instructions when no file is uploaded
-    st.info("👆 Please upload a CSV file to get started.")
-    
-    # Show required columns
-    st.markdown("### 📋 Required CSV Format:")
-    st.info(f"This application accepts CSV files with exactly **{len(REQUIRED_COLUMNS)} columns** as listed below:")
-    
-    # Display required columns in a nice format
-    cols_display = pd.DataFrame({
-        'Column Number': range(1, len(REQUIRED_COLUMNS) + 1),
-        'Column Name': REQUIRED_COLUMNS
-    })
-    st.dataframe(cols_display, use_container_width=True, hide_index=True)
-    
-    st.markdown("**Note:** Column order doesn't matter, but all columns must be present in the uploaded file.")
+    st.info("👆 Please upload a Transactions CSV file to get started.")
+    st.markdown("### 📋 Required Columns:")
+    st.write(", ".join(REQUIRED_COLUMNS))
