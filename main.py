@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
+import os
 
 # Function to format numbers in Indian currency standard
 def format_indian_number(num):
@@ -158,11 +159,20 @@ if 'df' not in st.session_state:
     st.session_state.df = None
 
 # File uploader
-uploaded_file = st.file_uploader(
-    "Choose a CSV file",
-    type=['csv'],
-    help="Upload a CSV file to view and analyze its data"
-)
+col1, col2 = st.columns(2)
+with col1:
+    uploaded_file = st.file_uploader(
+        "1. Choose Transactions CSV file",
+        type=['csv'],
+        help="Upload the primary transaction CSV file"
+    )
+
+with col2:
+    fundamentals_file = st.file_uploader(
+        "2. Choose Fundamentals CSV file (Optional)",
+        type=['csv'],
+        help="Upload a fundamentals CSV file to merge with the transactions"
+    )
 
 # Process uploaded file
 if uploaded_file is not None:
@@ -647,17 +657,26 @@ if uploaded_file is not None:
 
                             # Merge with external fundamentals file
                             try:
-                                fundamentals_path = "All Name.11-02-2026.Technical.csv"
-                                # Check if file exists in current directory or use absolute path
-                                import os
-                                if not os.path.exists(fundamentals_path):
-                                    # Try looking in the script's directory
-                                    script_dir = os.path.dirname(os.path.abspath(__file__))
-                                    fundamentals_path = os.path.join(script_dir, "All Name.17-01-2026.Default.csv")
-
-                                if os.path.exists(fundamentals_path):
-                                    fundamentals_df = pd.read_csv(fundamentals_path)
+                                fundamentals_df = None
+                                source_name = ""
+                                
+                                # Check if user uploaded a fundamentals file
+                                if fundamentals_file is not None:
+                                    fundamentals_df = pd.read_csv(fundamentals_file)
+                                    source_name = getattr(fundamentals_file, "name", "uploaded file")
+                                else:
+                                    # Fallback to default files if they exist
+                                    default_path1 = "All Name.11-02-2026.Technical.csv"
+                                    default_path2 = "All Name.17-01-2026.Default.csv"
                                     
+                                    if os.path.exists(default_path1):
+                                        fundamentals_df = pd.read_csv(default_path1)
+                                        source_name = os.path.basename(default_path1)
+                                    elif os.path.exists(default_path2):
+                                        fundamentals_df = pd.read_csv(default_path2)
+                                        source_name = os.path.basename(default_path2)
+                                
+                                if fundamentals_df is not None:
                                     # Extract symbol from companyId (e.g., "NSE:20MICRONS" -> "20MICRONS")
                                     # The user specified "company ID is NSE:Company Name", implying the suffix is the identifier to match
                                     fundamentals_df['Temp_Symbol_Match'] = fundamentals_df['companyId'].astype(str).str.split(':').str[-1]
@@ -680,11 +699,11 @@ if uploaded_file is not None:
                                         drop_cols = ['Temp_Symbol_Match', 'SYMBOL_Match']
                                         combined_summary = combined_summary.drop(columns=[c for c in drop_cols if c in combined_summary.columns])
                                         
-                                        st.success(f"✅ Successfully merged data from {os.path.basename(fundamentals_path)}")
+                                        st.success(f"✅ Successfully merged data from {source_name}")
                                     else:
                                         st.warning("⚠️ SYMBOL column missing in transactions data, cannot merge fundamentals.")
                                 else:
-                                    st.warning(f"⚠️ Could not find file: {fundamentals_path}")
+                                    st.info("ℹ️ No fundamentals file uploaded and no default file found. Skipping merge.")
                             except Exception as e:
                                 st.warning(f"⚠️ Error merging fundamentals file: {e}")
                             
