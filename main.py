@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import os
+import pickle
 
 # Function to format numbers in Indian currency standard
 def format_indian_number(num):
@@ -154,6 +155,35 @@ st.markdown(
 
 st.markdown("---")
 
+# ── Disk cache helpers ────────────────────────────────────────────────────────
+CACHE_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.cache')
+CACHE_FILE = os.path.join(CACHE_DIR, 'app_state.pkl')
+
+CAKEY_KEYS = ['df_main', 'combined_summary', 'filter_info_text',
+               'last_processed_files', 'buy_max_indices', 'sell_max_indices']
+
+def load_cache():
+    """Load persisted state from disk into session_state (only on first run)."""
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'rb') as f:
+                saved = pickle.load(f)
+            for k in CAKEY_KEYS:
+                if k not in st.session_state and k in saved:
+                    st.session_state[k] = saved[k]
+        except Exception:
+            pass  # corrupt cache – ignore silently
+
+def save_cache():
+    """Persist relevant session_state keys to disk."""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    payload = {k: st.session_state.get(k) for k in CAKEY_KEYS}
+    with open(CACHE_FILE, 'wb') as f:
+        pickle.dump(payload, f)
+
+# Load cache before initialising defaults so saved values aren't overwritten
+load_cache()
+
 # Initialize session state for persistent storage
 if 'df_main' not in st.session_state: st.session_state.df_main = None
 if 'combined_summary' not in st.session_state: st.session_state.combined_summary = None
@@ -239,7 +269,9 @@ if files_changed:
             # Merge
             comb = pd.merge(b_sum, s_sum.drop(columns=['SYMBOL']), on='COMPANY', how='outer')
             num_cols_all = ['Total Share Buys', 'Total Value of Share Buy', 'Delta Shareholding Buy', 'Total Share Sells', 'Total Value of Share Sell', 'Delta Shareholding Sell']
-            comb[num_cols_all] = comb[num_cols_all].fillna(0)
+            for _c in num_cols_all:
+                if _c in comb.columns:
+                    comb[_c] = pd.to_numeric(comb[_c], errors='coerce').fillna(0)
             if comb['SYMBOL'].isna().any():
                 symbol_map = t_df.groupby('COMPANY')['SYMBOL'].first().to_dict()
                 comb['SYMBOL'] = comb['COMPANY'].map(symbol_map).fillna(comb['SYMBOL'])
@@ -302,10 +334,12 @@ if files_changed:
             st.session_state.buy_max_indices = [i+1 for i, c in enumerate(order) if c in ['Max Buy Date', 'Max Buy Value', 'Number of Max Buy Shares', 'Max Avg Buy']]
             st.session_state.sell_max_indices = [i+1 for i, c in enumerate(order) if c in ['Max Sell Date', 'Max Sell Value', 'Number of Max Sell Shares', 'Max Avg Sell']]
             
-            # Commit to state
+            # Commit to state + persist to disk
             st.session_state.df_main = df
             st.session_state.combined_summary = comb
             st.session_state.last_processed_files = current_files
+            save_cache()
+            st.toast("💾 Data cached to disk!", icon="✅")
 
     except Exception as e:
         st.error(f"❌ Error: {str(e)}")
