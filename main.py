@@ -3,6 +3,7 @@ import pandas as pd
 import io
 import os
 import pickle
+from datetime import datetime
 
 # Function to format numbers in Indian currency standard
 def format_indian_number(num):
@@ -160,7 +161,8 @@ CACHE_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.cache')
 CACHE_FILE = os.path.join(CACHE_DIR, 'app_state.pkl')
 
 CAKEY_KEYS = ['df_main', 'combined_summary', 'filter_info_text',
-               'last_processed_files', 'buy_max_indices', 'sell_max_indices']
+               'last_processed_files', 'buy_max_indices', 'sell_max_indices',
+               'last_processed_timestamp']
 
 def load_cache():
     """Load persisted state from disk into session_state (only on first run)."""
@@ -191,6 +193,7 @@ if 'filter_info_text' not in st.session_state: st.session_state.filter_info_text
 if 'last_processed_files' not in st.session_state: st.session_state.last_processed_files = (None, None)
 if 'buy_max_indices' not in st.session_state: st.session_state.buy_max_indices = []
 if 'sell_max_indices' not in st.session_state: st.session_state.sell_max_indices = []
+if 'last_processed_timestamp' not in st.session_state: st.session_state.last_processed_timestamp = None
 
 # File uploader
 col1, col2 = st.columns(2)
@@ -198,6 +201,28 @@ with col1:
     uploaded_file = st.file_uploader("1. Choose Transactions CSV file", type=['csv'], help="Upload the primary transaction CSV file")
 with col2:
     fundamentals_file = st.file_uploader("2. Choose Fundamentals CSV file (Optional)", type=['csv'], help="Upload a fundamentals CSV file")
+
+# Timestamp badge
+_ts = st.session_state.last_processed_timestamp
+if _ts:
+    st.markdown(
+        f"""
+        <div style="display:flex;align-items:center;gap:8px;margin:6px 0 0 2px;">
+            <span style="font-size:0.75rem;color:#a0a0a0;">Last processed:</span>
+            <span style="
+                background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
+                color:#90caf9;
+                font-size:0.75rem;
+                font-weight:600;
+                padding:3px 10px;
+                border-radius:12px;
+                border:1px solid #2d5a8e;
+                letter-spacing:0.03em;
+            ">⏰ {_ts}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # Track file changes to avoid redundant heavy processing
 uploaded_id = f"{uploaded_file.name}_{uploaded_file.size}" if uploaded_file else None
@@ -338,6 +363,7 @@ if files_changed:
             st.session_state.df_main = df
             st.session_state.combined_summary = comb
             st.session_state.last_processed_files = current_files
+            st.session_state.last_processed_timestamp = datetime.now().strftime("%d %b %Y, %I:%M:%S %p")
             save_cache()
             st.toast("💾 Data cached to disk!", icon="✅")
 
