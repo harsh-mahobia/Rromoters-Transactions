@@ -58,7 +58,7 @@ _html('<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;6
 _css("""
 html, body, .stApp, [class*="st-"] { font-family: 'Inter', sans-serif !important; }
 #MainMenu, footer { visibility: hidden; }
-.block-container { padding-top: 1.25rem !important; padding-bottom: 2rem !important; }
+.block-container { padding-top: 2.5rem !important; padding-bottom: 2rem !important; }
 hr { border-color: #1e2438 !important; margin: 1.25rem 0 !important; }
 
 /* Metric cards */
@@ -91,6 +91,33 @@ hr { border-color: #1e2438 !important; margin: 1.25rem 0 !important; }
     box-shadow: 0 4px 14px rgba(59,130,246,.45) !important;
     transform: translateY(-1px) !important;
 }
+
+/* File uploader — smaller browse button */
+[data-testid="stFileUploader"] section button {
+    font-size: .73rem !important;
+    padding: .3rem .85rem !important;
+    border-radius: 7px !important;
+}
+[data-testid="stFileUploaderDropzone"] {
+    padding: .6rem .8rem !important;
+}
+
+/* Source badge hover */
+.nav-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    text-decoration: none; border-radius: 20px;
+    font-family: 'Inter', sans-serif; font-size: .73rem; font-weight: 500;
+    padding: 5px 12px; border: 1px solid #2a3045;
+    transition: border-color .18s, background .18s, box-shadow .18s, transform .18s;
+}
+.nav-badge:hover {
+    border-color: currentColor;
+    box-shadow: 0 0 0 1px currentColor;
+    transform: translateY(-1px);
+    background: #1e2438 !important;
+}
+.nav-badge-blue  { background: #1a1f2e; color: #93b4f7; }
+.nav-badge-purple { background: #1a1f2e; color: #c084fc; }
 """)
 
 # ── Required columns ──────────────────────────────────────────────────────────
@@ -138,11 +165,7 @@ _html("""
 _html("""
 <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
   <a href="https://www.nseindia.com/companies-listing/corporate-filings-insider-trading"
-     target="_blank"
-     style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;
-            background:#1a1f2e;border:1px solid #2a3045;color:#93b4f7;
-            font-family:'Inter',sans-serif;font-size:.73rem;font-weight:500;
-            padding:5px 12px;border-radius:20px;">
+     target="_blank" class="nav-badge nav-badge-blue">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
@@ -151,10 +174,7 @@ _html("""
     NSE India &mdash; Insider Trading
   </a>
   <a href="https://www.stockscans.in/scans" target="_blank"
-     style="display:inline-flex;align-items:center;gap:6px;text-decoration:none;
-            background:#1a1f2e;border:1px solid #2a3045;color:#c084fc;
-            font-family:'Inter',sans-serif;font-size:.73rem;font-weight:500;
-            padding:5px 12px;border-radius:20px;">
+     class="nav-badge nav-badge-purple">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <rect x="2" y="3" width="20" height="14" rx="2"/>
