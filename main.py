@@ -92,14 +92,20 @@ hr { border-color: #1e2438 !important; margin: 1.25rem 0 !important; }
     transform: translateY(-1px) !important;
 }
 
-/* File uploader — smaller browse button */
+/* File uploader — compact dropzone */
 [data-testid="stFileUploader"] section button {
     font-size: .73rem !important;
     padding: .3rem .85rem !important;
     border-radius: 7px !important;
 }
 [data-testid="stFileUploaderDropzone"] {
-    padding: .6rem .8rem !important;
+    padding: .55rem .8rem !important;
+}
+[data-testid="stFileUploaderDropzone"] > div > span {
+    font-size: .75rem !important;
+}
+[data-testid="stFileUploaderDropzone"] > div > small {
+    font-size: .65rem !important;
 }
 
 /* Source badge hover */
