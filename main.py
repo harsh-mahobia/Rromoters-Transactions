@@ -262,7 +262,9 @@ if files_changed:
                         max_s = s_col.max()
                         rows_s = c_data[s_col == max_s]
                         if len(rows_s) > 0:
-                            best_row = rows_s.loc[rows_s['VALUE OF SECURITY (ACQUIRED/DISPLOSED)'].idxmax()]
+                            val_col = rows_s['VALUE OF SECURITY (ACQUIRED/DISPLOSED)']
+                            idx = val_col.idxmax() if val_col.notna().any() else rows_s.index[0]
+                            best_row = rows_s.loc[idx]
                             m[f'Number of Max {pref} Shares'] = best_row['NO. OF SECURITIES (ACQUIRED/DISPLOSED)']
                             m[f'Max {pref} Date'] = best_row['DATE OF ALLOTMENT/ACQUISITION FROM']
                     else:
